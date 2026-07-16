@@ -1,6 +1,4 @@
-# DAI2026 Submission — When Should Global Guidance Be Refreshed?
-
-## CARR: Anonymous Code and Results Supplement
+# DAI2026 Submission — CARR: When Should Global Guidance Be Refreshed?
 
 This repository is the anonymous supplementary artifact for the DAI 2026
 submission *When Should Global Guidance Be Refreshed?* Its purpose is to give
@@ -8,14 +6,68 @@ reviewers a direct, auditable path from the proposed method to the code, the
 3,840-run result table, and every reported numerical conclusion. It is not a
 manuscript repository.
 
-The artifact supports three reviewer tasks:
+## Repository Structure
 
-1. **Inspect the implementation:** follow the CARR policy from causal inputs to
-   hold, reactivate, and generate actions.
-2. **Inspect the evidence:** examine the complete compact Experiment B matrix
-   and its within-cell pairing and safety fields.
-3. **Recompute the conclusions:** regenerate the committed analysis JSON and
-   result figures from the included table.
+```text
+CARR/
+├── README.md                                      # Artifact overview and reproduction guide
+├── pyproject.toml                                 # Package metadata and optional dependencies
+├── src/dai_lmapf/                                 # CARR implementation
+│   ├── __init__.py                                # Package exports
+│   ├── publication_policy.py                      # Hold/reactivate/generate policy logic
+│   ├── same_call_claim_runner.py                  # Causal features, budgets, and safety audit
+│   ├── online_ggo_adapter.py                      # Interface to the OnlineGGO simulator
+│   ├── frozen_cnn_generator.py                    # Frozen guidance-generator wrapper
+│   ├── absolute_workload.py                       # Paired absolute task-tape construction
+│   ├── invariants.py                              # MAPF safety invariants
+│   ├── protocol.py                                # Scenario and workload contracts
+│   └── tasks.py                                   # Released-task validation
+├── scripts/                                       # Execution, analysis, and figure scripts
+│   ├── run_same_call_confirmation_b.py            # Experiment B entry point
+│   ├── run_same_call_confirmation_v1.py           # Full paired experiment runner
+│   ├── analyze_compact_b.py                       # Recompute all reported statistics
+│   ├── make_result_figures.py                     # Regenerate result figures
+│   ├── make_framework_figure.py                   # Regenerate the CARR framework figure
+│   ├── setup_onlineggo.sh                         # Reconstruct the patched backbone
+│   └── verify_frozen_cnn_checkpoint.py            # Checkpoint compatibility check
+├── configs/
+│   └── experiment_b_public.json                   # Public Experiment B design
+├── results/same_call_confirmation_b/
+│   └── compact_runs.csv                           # Complete 3,840-run result table
+├── reports/
+│   └── compact_b_analysis.json                    # Recomputed statistics and integrity audit
+├── assets/                                        # Figures displayed in this README
+│   ├── framework.png                              # CARR system architecture
+│   ├── pareto_frontier.png                        # Throughput–call Pareto frontier
+│   └── superiority_forest.png                     # Paired-effect forest plot
+├── patches/                                       # Pinned OnlineGGO modifications
+│   ├── onlineggo-local.patch                      # Source-code patch
+│   ├── onlineggo_configs/                         # Backbone experiment configurations
+│   ├── OnlineGGO-LICENSE                         # Upstream license
+│   └── README.md                                  # Patch reconstruction notes
+├── tests/                                         # Implementation and result regression tests
+│   ├── test_compact_b_artifact.py                 # Exact result reproduction
+│   ├── test_publication_policy.py                 # CARR policy contracts
+│   ├── test_same_call_claim_runner.py             # Budgets, workloads, and safety checks
+│   ├── test_online_ggo_adapter.py                 # Simulator-adapter behavior
+│   ├── test_frozen_cnn_generator.py               # Frozen-CNN contract
+│   ├── test_run_same_call_confirmation_b.py       # Experiment B control plane
+│   ├── test_absolute_workload.py                  # Absolute workload tapes
+│   ├── test_invariants.py                         # Joint-transition safety
+│   ├── test_protocol.py                           # Scenario protocol
+│   └── test_tasks.py                              # Task validation
+├── .gitignore                                     # Local/generated artifact exclusions
+└── .gitattributes                                 # Cross-platform text/binary attributes
+```
+
+The repository contains three complementary evidence layers: the method
+implementation under `src/`, the complete compact experimental evidence under
+`results/`, and a standalone analysis path under `scripts/` and `reports/`.
+The compact analysis requires only Python's standard library; rebuilding the
+full simulator additionally requires the patched OnlineGGO backbone and the
+trained checkpoint described below.
+
+## Method Overview
 
 The proposed adaptive global-guidance publication policy, **CARR**, operates
 in lifelong multi-agent path finding (LMAPF) and chooses one of three actions
@@ -99,41 +151,7 @@ failed non-inferiority test.
 
 ![Root-level paired comparisons](assets/superiority_forest.png)
 
-## Repository structure and reviewer path
-
-```mermaid
-flowchart LR
-    A["Start here<br/>README"] --> B["Understand CARR<br/>src/dai_lmapf/"]
-    A --> C["Inspect design<br/>configs/experiment_b_public.json"]
-    A --> D["Inspect 3,840 runs<br/>results/.../compact_runs.csv"]
-    B --> E["Check implementation<br/>tests/"]
-    B --> F["Trace full experiment<br/>scripts/run_same_call_confirmation_*.py"]
-    F --> G["Reconstruct backbone<br/>patches/ + setup_onlineggo.sh"]
-    D --> H["Recompute statistics<br/>scripts/analyze_compact_b.py"]
-    C --> H
-    H --> I["Verify conclusions<br/>reports/compact_b_analysis.json"]
-    I --> J["Review visual evidence<br/>assets/ + figure scripts"]
-```
-
-The upper branch exposes the method and execution code; the lower branch
-connects the public experimental design and per-run evidence to the exact
-statistics and figures reported in the submission. A reviewer interested only
-in numerical verification can follow `README → compact_runs.csv →
-analyze_compact_b.py → compact_b_analysis.json` without building the simulator.
-
-Repository contents:
-
-| Path | Contents |
-|---|---|
-| `src/dai_lmapf/` | CARR policy, workload construction, safety contracts, frozen-CNN wrapper, and OnlineGGO adapter |
-| `scripts/run_same_call_confirmation_*.py` | Experiment execution entry points |
-| `scripts/analyze_compact_b.py` | Standard-library analysis of the included 3,840-run table |
-| `scripts/make_*figure*.py` | Result and framework figure generation |
-| `configs/experiment_b_public.json` | Methods, roots, scenarios, workloads, and inferential settings |
-| `results/same_call_confirmation_b/compact_runs.csv` | Anonymous per-run experimental results |
-| `reports/compact_b_analysis.json` | Machine-readable audit, statistics, tests, and Pareto summary |
-| `patches/` | Patch and configuration files for the pinned OnlineGGO backbone |
-| `tests/` | Core implementation and result-regression tests |
+## Core Execution Path
 
 The claim-bearing code path is:
 
