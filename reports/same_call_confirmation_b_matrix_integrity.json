@@ -1,0 +1,41 @@
+{
+  "artifact_sha256": {
+    "narrow_r020": "7fb06e03b724fca32863a85eec4426f4beb075fb9183c748263b3bd4ad874745",
+    "narrow_r035": "e714feeca55f892103a896e8b87c6980db12e77c4445dd3f080086a4e01daec9",
+    "regular_r020": "4044672590cfd0b650dec0b6947e0e7f28019a0c75a929253918b22d6f383553",
+    "regular_r035": "103e2623f2e9b7cbadf676e89743c284f71c58aa2bc9f02571bd05d78396ec8d"
+  },
+  "attempt_completed_per_scenario": 960,
+  "attempt_ledger_events_per_scenario": 1920,
+  "attempt_started_per_scenario": 960,
+  "checks": {
+    "budget_schedule_and_generator_conservation": true,
+    "checkpoint_source_map_and_config_binding": true,
+    "complete_arm_cartesian_product": true,
+    "cross_method_pairing": true,
+    "formal_outputs_not_overwritten": true,
+    "fresh_process_instance_and_uuid": true,
+    "ledger_identity_and_run_hash_binding": true,
+    "no_missing_duplicate_retry_or_deleted_arm": true,
+    "runtime_environment_identical_across_scenarios": true,
+    "safety_rng_tape_and_future_access_invariants": true
+  },
+  "claim_scope": "effect-blind execution and integrity audit only",
+  "config_path": "/root/autodl-tmp/dai/research_workspace/configs/same_call_confirmation_b.json",
+  "config_sha256": "44127caa81272e7fb15fcbf33a9d430222c869238cf87e35280f4c0f3fc4f112",
+  "effect_inference_performed": false,
+  "environment_sha256": "629f1db7408419b974edd61ae63f9c27d9a863baf5286ae6e015c629944f9cf1",
+  "execution_host": "autodl-container-3e1040b01e-a5859821",
+  "method_rankings_inspected": false,
+  "next_step": "execute the separately frozen B analyzer exactly once",
+  "paired_cells": 480,
+  "passed": true,
+  "root_count": 40,
+  "runs_per_scenario": 960,
+  "scenario_count": 4,
+  "schema": "dai.same-call-confirmation-matrix-integrity/b",
+  "status": "complete",
+  "total_runs": 3840,
+  "unique_process_instances": 3840,
+  "unique_run_uuids": 3840
+}

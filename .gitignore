@@ -1,0 +1,77 @@
+# Operating-system and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Python caches, environments, and build outputs
+**/__pycache__/
+*.py[cod]
+*.so
+*.dylib
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+build/
+dist/
+*.egg-info/
+
+# Local credentials and machine-specific configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+*_autodl_key*
+
+# Temporary, machine-local, and duplicate archive material
+tmp/
+logs/
+archives/
+coursework_baseline/
+reports/CODEX_HANDOFF_EXPERIMENT_B_2026-07-15.md
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+
+# LaTeX build products
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.lot
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+
+# OnlineGGO is reconstructed from the pinned upstream revision and local patch.
+external/OnlineGGO/
+
+# Raw experiment traces are too large for ordinary Git. Keep compact tables,
+# summaries, and frozen analyses; publish full raw archives separately.
+results/**/*.json
+results/**/*.jsonl
+!results/**/*analysis*.json
+!results/**/summary.json
+!results/**/ASSESSMENT.json
+!results/**/ARTIFACT_SHA256.json
+!results/**/online_ggo_preflight*.json
+!results/**/autodl_environment_manifest.json
+
+# Native experiment binaries are regenerated for each target platform.
+results/**/*.so
+results/**/*.dylib

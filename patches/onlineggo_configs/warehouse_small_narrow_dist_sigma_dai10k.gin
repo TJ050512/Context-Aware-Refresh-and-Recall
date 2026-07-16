@@ -1,0 +1,8 @@
+include "config/traffic_mapf/period_online/warehouse_small_narrow_dist_sigma.gin"
+
+experiment.name = "trafficMAPF wnarrow periodical on DAI 10k gate"
+
+# Continue the hash-locked 2k pilot to a 10k feasibility gate. Keep n_evals
+# unchanged so the resumed CMA-ES objective has the same sampling semantics.
+Manager.max_evals = 10000
+TrafficMAPFManager.n_evals = 1

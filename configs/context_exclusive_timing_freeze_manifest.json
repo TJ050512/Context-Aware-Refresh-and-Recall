@@ -1,0 +1,26 @@
+{
+  "schema": "dai.context-exclusive-timing-freeze/v1",
+  "status": "frozen_before_first_exclusive_timing_run",
+  "frozen_at": "2026-07-14T13:31:00+08:00",
+  "files": {
+    "configs/context_exclusive_timing_protocol_v1.json": "aff4a620806faa0a34883dbe783b26aa4df7a0f5513b1cdfc14a535febf5a543",
+    "scripts/run_context_exclusive_timing_v1.sh": "4244aab1302641df9c46d374f44e2bcdb0996d4454156275dbfc961006835bd5",
+    "scripts/analyze_exclusive_timing.py": "3f1a2b0bdd06c8deda390e1a690e3e4d46ab61833665e4f515828545a9ccef69",
+    "tests/test_analyze_exclusive_timing.py": "7b46672f3f5d9c94c1abe55036e4e20f8263084bee3720eee2ecdc8aa84c7f28"
+  },
+  "execution_lock": {
+    "runs": 120,
+    "jobs": 1,
+    "exclusive_timing": true,
+    "scenarios_run_serially": true,
+    "throughput_inference_permitted": false,
+    "generator_seconds_reduction_threshold": 0.8
+  },
+  "pre_freeze_checks": {
+    "exclusive_timing_analyzer_tests_passed": 8,
+    "full_repository_tests_passed": 168,
+    "full_repository_tests_skipped_for_missing_local_linux_backend": 10,
+    "fresh_validation_performance_values_used": false,
+    "exclusive_timing_runs_completed": 0
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "schema": "dai.validation-timing-merge-freeze/v1",
+  "status": "frozen_before_validation_or_timing_analysis_results_were_available",
+  "frozen_at": "2026-07-14T13:35:00+08:00",
+  "files": {
+    "scripts/merge_validation_timing_evidence.py": "beae7175940a97534629f8d67034691db51742ddcc33acc61331cad90a88c41d",
+    "tests/test_merge_validation_timing_evidence.py": "242f20e6412cc10a4278ee533d7868a0403aee6474fd6abe0be4fb426ed4b4b2"
+  },
+  "merge_rule": "context_validation_candidate_passed AND exclusive_timing_primary_gate_passed",
+  "throughput_reanalysis_permitted": false,
+  "locked_test_or_global_sota_claim_permitted": false,
+  "pre_freeze_checks": {
+    "merge_tests_passed": 9,
+    "full_repository_tests_passed": 183,
+    "full_repository_tests_skipped_for_missing_local_linux_backend": 10,
+    "actual_validation_analysis_read": false,
+    "actual_exclusive_timing_analysis_read": false
+  }
+}

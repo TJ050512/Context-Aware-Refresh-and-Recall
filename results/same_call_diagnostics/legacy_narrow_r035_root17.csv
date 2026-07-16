@@ -1,0 +1,16 @@
+method,seed,map_id,workload,num_task_finished,throughput_per_timestep,mandatory_bootstrap_calls,post_bootstrap_publication_count,publication_budget,budget_violation_count,generator_seconds,simulator_seconds,elapsed_seconds
+bootstrap_only,17,warehouse_small_narrow_kiva,abrupt,4353,2.1765,1,0,0,0,0.001984174,7.849452908,10.486857760697603
+context_dualcap_G4S5,17,warehouse_small_narrow_kiva,abrupt,4771,2.3855,1,5,5,0,0.009996396000000001,7.427482723,10.602057162672281
+context_eventreserve_G5S6,17,warehouse_small_narrow_kiva,abrupt,4771,2.3855,1,5,6,0,0.010499053,7.337873895,10.45080691203475
+context_memory_B25,17,warehouse_small_narrow_kiva,abrupt,4771,2.3855,1,5,25,0,0.010998016,7.8119439779999995,14.99215754494071
+exact_even_B25,17,warehouse_small_narrow_kiva,abrupt,4729,2.3645,1,25,25,0,0.05012022199999999,7.889572478,11.065242670476437
+bootstrap_only,17,warehouse_small_narrow_kiva,recurrent,4461,2.2305,1,0,0,0,0.001851343,7.780892188000003,10.530179522931576
+context_dualcap_G4S5,17,warehouse_small_narrow_kiva,recurrent,4842,2.421,1,4,5,0,0.011007039000000001,7.569889081,15.06635308638215
+context_eventreserve_G5S6,17,warehouse_small_narrow_kiva,recurrent,4842,2.421,1,4,6,0,0.009508547,8.250597897999999,11.145652644336224
+context_memory_B25,17,warehouse_small_narrow_kiva,recurrent,4842,2.421,1,4,25,0,0.009374805,7.443177560999998,10.347430139780045
+exact_even_B25,17,warehouse_small_narrow_kiva,recurrent,4371,2.1855,1,25,25,0,0.049385036,7.204882243000002,10.589480020105839
+bootstrap_only,17,warehouse_small_narrow_kiva,stationary,3935,1.9675,1,0,0,0,0.002559004,7.055221341000001,12.926005687564611
+context_dualcap_G4S5,17,warehouse_small_narrow_kiva,stationary,3779,1.8895,1,3,5,0,0.0076067010000000004,7.636849227000001,10.309918355196714
+context_eventreserve_G5S6,17,warehouse_small_narrow_kiva,stationary,3779,1.8895,1,3,6,0,0.007807124000000001,7.648091167999996,10.464906211942434
+context_memory_B25,17,warehouse_small_narrow_kiva,stationary,3779,1.8895,1,3,25,0,0.007611852,6.985955151999997,9.843839064240456
+exact_even_B25,17,warehouse_small_narrow_kiva,stationary,3689,1.8445,1,25,25,0,0.049020468,7.103476866,10.400948815047741

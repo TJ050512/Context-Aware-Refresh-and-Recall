@@ -1,0 +1,64 @@
+{
+  "schema_version": "1",
+  "status": "frozen semantic/replay gate before official execution",
+  "purpose": "OnlineGGO feasibility and within-backbone publication-schedule headroom; not a final test",
+  "source_commit": "ff6d830e2fd5bf85ccbb72eaec0fb8df1cf1c256",
+  "platform": {
+    "os": "Ubuntu",
+    "architecture": "x86_64",
+    "python": "3.9"
+  },
+  "backbone": "trafficMAPF_on with GPIBT and GUIDANCE_LNS=OFF",
+  "base_gin": "CMAES/config/competition/online_update/33x36_400_traf_task.gin",
+  "map": "warehouse-33x36",
+  "num_agents": 400,
+  "horizon_steps": 1000,
+  "decision_window_steps": 20,
+  "development_seeds": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+  "workloads": [
+    "static_control",
+    "single_abrupt_goal_distribution_shift",
+    "recurring_goal_distribution_shift"
+  ],
+  "methods": [
+    {"id": "never", "policy": "bootstrap_only"},
+    {"id": "always", "policy": "publish_every_eligible_window"},
+    {"id": "period_20", "policy": "fixed_period", "steps": 20},
+    {"id": "period_50", "policy": "fixed_period", "steps": 50},
+    {"id": "period_100", "policy": "fixed_period", "steps": 100},
+    {"id": "oracle_shift", "policy": "publish_at_true_shift", "diagnostic_only": true}
+  ],
+  "paired_controls": {
+    "same_start_state": true,
+    "same_task_stream": true,
+    "same_frozen_generator": true,
+    "same_raw_action_on_reuse": true
+  },
+  "required_preflight": [
+    "compile_instrumented_extension",
+    "record_compiler_flags_and_binary_hash",
+    "assert_GUIDANCE_LNS_OFF",
+    "asymmetric_RDLU_channel_sentinel",
+    "hash_normalized_weights_installed_in_cpp",
+    "cached_raw_action_replay",
+    "fixed_start_and_exogenous_task_tape_replay",
+    "nonoverlapping_event_window_sentinel",
+    "guide_path_build_event_sentinel",
+    "zero_vertex_and_edge_swap_collisions"
+  ],
+  "primary_endpoints": [
+    "total_throughput",
+    "post_shift_throughput",
+    "recovery_time",
+    "publication_count",
+    "cohort_service_time",
+    "generator_seconds",
+    "planner_seconds",
+    "total_wall_clock_seconds"
+  ],
+  "gate": {
+    "required_ordering": "at least one non-oracle dynamic schedule significantly beats never and leaves headroom relative to always or oracle_shift",
+    "static_degradation_max_fraction": 0.02,
+    "safety_violations_allowed": 0
+  }
+}

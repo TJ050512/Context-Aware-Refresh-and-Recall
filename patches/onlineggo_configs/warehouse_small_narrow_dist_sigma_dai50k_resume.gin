@@ -1,0 +1,5 @@
+include "config/traffic_mapf/period_online/warehouse_small_narrow_dist_sigma_dai10k_resume.gin"
+
+# Stage 2 is deliberately not launched automatically.  Resume to this target
+# only after the 10k checkpoint passes the frozen development-tape gate.
+Manager.max_evals = 50000

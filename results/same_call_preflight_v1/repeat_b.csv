@@ -1,0 +1,3 @@
+method,seed,map_id,workload,num_task_finished,throughput_per_timestep,mandatory_bootstrap_calls,post_bootstrap_publication_count,publication_budget,budget_violation_count,generator_seconds,simulator_seconds,elapsed_seconds
+context_memory_B25,17,warehouse_small_narrow_kiva,stationary,3830,1.915,1,9,25,0,0.010158732,5.333435975999998,9.876805074512959
+exact_even_B25,17,warehouse_small_narrow_kiva,stationary,3781,1.8905,1,25,25,0,0.057882900999999994,5.327450610999999,10.256936557590961

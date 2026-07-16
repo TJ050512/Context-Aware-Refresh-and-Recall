@@ -1,0 +1,37 @@
+{
+  "blockers": [
+    "linux_x86_64",
+    "python_3_9",
+    "cmake_available",
+    "eigen_submodule",
+    "minidnn_submodule",
+    "pybind11_submodule",
+    "period_on_module"
+  ],
+  "checks": {
+    "cmake_available": false,
+    "cxx_available": true,
+    "eigen_submodule": false,
+    "linux_x86_64": false,
+    "make_available": true,
+    "minidnn_submodule": false,
+    "period_on_module": false,
+    "pinned_revision_available": true,
+    "pybind11_submodule": false,
+    "python_3_9": false,
+    "source_present": true
+  },
+  "machine": "arm64",
+  "notes": [
+    "Official reference builds use Ubuntu 20.04, Python 3.9 and x86_64 Singularity.",
+    "Boost 1.71 and the pinned Python requirements still need verification inside the container.",
+    "Audit action channels on an asymmetric map: Python observations use R,U,L,D while C++ weights use R,D,L,U.",
+    "The repository does not ship the trained OnlineGGO CMA-ES checkpoint."
+  ],
+  "platform": "Darwin",
+  "python": "3.13.13",
+  "ready_to_build": false,
+  "ready_to_run": false,
+  "repository": "/Users/maxiaoxiao.27/Documents/DAI/research_workspace/external/OnlineGGO",
+  "revision": "ff6d830e2fd5bf85ccbb72eaec0fb8df1cf1c256"
+}

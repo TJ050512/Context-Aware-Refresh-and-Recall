@@ -1,0 +1,561 @@
+{
+  "config": {
+    "agent_counts": [
+      16,
+      24
+    ],
+    "budget_mode": "token_fraction_for_deterministic_smoke; wall-clock is logged but not fed back",
+    "decision_interval_steps": 5,
+    "guidance_scale": 5.0,
+    "horizon_steps": 600,
+    "maps": [
+      "two_corridor",
+      "three_corridor",
+      "open"
+    ],
+    "methods": [
+      "shortest",
+      "always_refresh",
+      "always_reuse",
+      "periodic_20",
+      "periodic_50",
+      "drift_25",
+      "drift_10",
+      "betg_25",
+      "betg_10"
+    ],
+    "primary_comparison": {
+      "agent_counts": [
+        24
+      ],
+      "baseline": "periodic_20",
+      "dynamic_workloads": [
+        "abrupt",
+        "recurring"
+      ],
+      "maps": [
+        "two_corridor",
+        "three_corridor"
+      ],
+      "proposed": "betg_25"
+    },
+    "purpose": "locked local mechanism validation; still not public-benchmark evidence",
+    "schema_version": "1",
+    "seeds": [
+      100,
+      101,
+      102,
+      103,
+      104,
+      105,
+      106,
+      107,
+      108,
+      109,
+      110,
+      111
+    ],
+    "workloads": [
+      "static",
+      "abrupt",
+      "recurring"
+    ]
+  },
+  "disclaimer": "Local transactional smoke simulator only; not public benchmark or SOTA evidence.",
+  "interpretation": "GO for official-backbone replication: the local mechanism cleared the registered 5% paired throughput gate. This still is not a paper result.",
+  "n_decision_records": 207360,
+  "n_runs": 1944,
+  "overall_methods": {
+    "always_refresh": {
+      "budget_violation_rate": 0.0,
+      "refresh_rate_mean": 1.0,
+      "refresh_seconds_mean": 0.28611640699537033,
+      "throughput_mean": 0.7267901234567902,
+      "wait_rate_mean": 0.04193399562757202,
+      "wall_time_seconds_mean": 0.398168941337963
+    },
+    "always_reuse": {
+      "budget_violation_rate": 0.0,
+      "refresh_rate_mean": 0.008333333333333333,
+      "refresh_seconds_mean": 0.002551505726851852,
+      "throughput_mean": 0.5448302469135803,
+      "wait_rate_mean": 0.12242348251028806,
+      "wall_time_seconds_mean": 0.07660248435185185
+    },
+    "betg_10": {
+      "budget_violation_rate": 0.0,
+      "refresh_rate_mean": 0.09884259259259259,
+      "refresh_seconds_mean": 0.029149310648148147,
+      "throughput_mean": 0.5608487654320987,
+      "wait_rate_mean": 0.09803835519547324,
+      "wall_time_seconds_mean": 0.13618375581481482
+    },
+    "betg_25": {
+      "budget_violation_rate": 0.0,
+      "refresh_rate_mean": 0.23584104938271608,
+      "refresh_seconds_mean": 0.06724781577777778,
+      "throughput_mean": 0.6077314814814815,
+      "wait_rate_mean": 0.07291313014403292,
+      "wall_time_seconds_mean": 0.18101769813425928
+    },
+    "drift_10": {
+      "budget_violation_rate": 0.0,
+      "refresh_rate_mean": 0.09664351851851852,
+      "refresh_seconds_mean": 0.02860478702777778,
+      "throughput_mean": 0.5665817901234568,
+      "wait_rate_mean": 0.09912117412551441,
+      "wall_time_seconds_mean": 0.12416005706944445
+    },
+    "drift_25": {
+      "budget_violation_rate": 0.0,
+      "refresh_rate_mean": 0.21851851851851853,
+      "refresh_seconds_mean": 0.06327304543518518,
+      "throughput_mean": 0.5994830246913581,
+      "wait_rate_mean": 0.07866801697530865,
+      "wall_time_seconds_mean": 0.1652883940925926
+    },
+    "periodic_20": {
+      "budget_violation_rate": 0.0,
+      "refresh_rate_mean": 0.25,
+      "refresh_seconds_mean": 0.0726603358611111,
+      "throughput_mean": 0.5956018518518519,
+      "wait_rate_mean": 0.07246543852880659,
+      "wall_time_seconds_mean": 0.17504989103703703
+    },
+    "periodic_50": {
+      "budget_violation_rate": 0.0,
+      "refresh_rate_mean": 0.1,
+      "refresh_seconds_mean": 0.02970113663425926,
+      "throughput_mean": 0.5568981481481482,
+      "wait_rate_mean": 0.09872363683127572,
+      "wall_time_seconds_mean": 0.1264125154537037
+    },
+    "shortest": {
+      "budget_violation_rate": 0.0,
+      "refresh_rate_mean": 0.0,
+      "refresh_seconds_mean": 0.0,
+      "throughput_mean": 0.5448302469135803,
+      "wait_rate_mean": 0.12242348251028806,
+      "wall_time_seconds_mean": 0.045857542023148144
+    }
+  },
+  "primary_paired_analysis": {
+    "baseline": "periodic_20",
+    "condition_effects": [
+      {
+        "absolute_throughput_gain": 0.020000000000000018,
+        "layout_seed": 201,
+        "map_id": "three_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.044776119402985114,
+        "workload": "abrupt"
+      },
+      {
+        "absolute_throughput_gain": -0.021666666666666667,
+        "layout_seed": 202,
+        "map_id": "three_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": -0.04693140794223827,
+        "workload": "abrupt"
+      },
+      {
+        "absolute_throughput_gain": 0.05666666666666664,
+        "layout_seed": 203,
+        "map_id": "three_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.12274368231046927,
+        "workload": "abrupt"
+      },
+      {
+        "absolute_throughput_gain": -0.021666666666666667,
+        "layout_seed": 204,
+        "map_id": "three_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": -0.04529616724738676,
+        "workload": "abrupt"
+      },
+      {
+        "absolute_throughput_gain": 0.015000000000000013,
+        "layout_seed": 205,
+        "map_id": "three_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.033582089552238834,
+        "workload": "abrupt"
+      },
+      {
+        "absolute_throughput_gain": 0.0,
+        "layout_seed": 206,
+        "map_id": "three_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.0,
+        "workload": "abrupt"
+      },
+      {
+        "absolute_throughput_gain": 0.0,
+        "layout_seed": 207,
+        "map_id": "three_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.0,
+        "workload": "abrupt"
+      },
+      {
+        "absolute_throughput_gain": 0.0050000000000000044,
+        "layout_seed": 208,
+        "map_id": "three_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.010909090909090919,
+        "workload": "abrupt"
+      },
+      {
+        "absolute_throughput_gain": -0.023333333333333317,
+        "layout_seed": 209,
+        "map_id": "three_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": -0.05223880597014922,
+        "workload": "abrupt"
+      },
+      {
+        "absolute_throughput_gain": -0.07000000000000006,
+        "layout_seed": 210,
+        "map_id": "three_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": -0.13953488372093034,
+        "workload": "abrupt"
+      },
+      {
+        "absolute_throughput_gain": -0.00666666666666671,
+        "layout_seed": 211,
+        "map_id": "three_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": -0.012618296529968535,
+        "workload": "abrupt"
+      },
+      {
+        "absolute_throughput_gain": -0.018333333333333313,
+        "layout_seed": 212,
+        "map_id": "three_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": -0.04150943396226411,
+        "workload": "abrupt"
+      },
+      {
+        "absolute_throughput_gain": 0.07166666666666666,
+        "layout_seed": 201,
+        "map_id": "three_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.166023166023166,
+        "workload": "recurring"
+      },
+      {
+        "absolute_throughput_gain": 0.0,
+        "layout_seed": 202,
+        "map_id": "three_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.0,
+        "workload": "recurring"
+      },
+      {
+        "absolute_throughput_gain": 0.04833333333333334,
+        "layout_seed": 203,
+        "map_id": "three_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.10861423220973784,
+        "workload": "recurring"
+      },
+      {
+        "absolute_throughput_gain": 0.0,
+        "layout_seed": 204,
+        "map_id": "three_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.0,
+        "workload": "recurring"
+      },
+      {
+        "absolute_throughput_gain": 0.05833333333333329,
+        "layout_seed": 205,
+        "map_id": "three_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.13461538461538453,
+        "workload": "recurring"
+      },
+      {
+        "absolute_throughput_gain": 0.0,
+        "layout_seed": 206,
+        "map_id": "three_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.0,
+        "workload": "recurring"
+      },
+      {
+        "absolute_throughput_gain": 0.0,
+        "layout_seed": 207,
+        "map_id": "three_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.0,
+        "workload": "recurring"
+      },
+      {
+        "absolute_throughput_gain": 0.03666666666666668,
+        "layout_seed": 208,
+        "map_id": "three_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.08730158730158734,
+        "workload": "recurring"
+      },
+      {
+        "absolute_throughput_gain": -0.034999999999999976,
+        "layout_seed": 209,
+        "map_id": "three_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": -0.0747330960854092,
+        "workload": "recurring"
+      },
+      {
+        "absolute_throughput_gain": 0.024999999999999967,
+        "layout_seed": 210,
+        "map_id": "three_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.05555555555555548,
+        "workload": "recurring"
+      },
+      {
+        "absolute_throughput_gain": 0.0,
+        "layout_seed": 211,
+        "map_id": "three_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.0,
+        "workload": "recurring"
+      },
+      {
+        "absolute_throughput_gain": -0.013333333333333364,
+        "layout_seed": 212,
+        "map_id": "three_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": -0.029629629629629697,
+        "workload": "recurring"
+      },
+      {
+        "absolute_throughput_gain": 0.07166666666666666,
+        "layout_seed": 201,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.2349726775956284,
+        "workload": "abrupt"
+      },
+      {
+        "absolute_throughput_gain": 0.02833333333333332,
+        "layout_seed": 202,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.10691823899371064,
+        "workload": "abrupt"
+      },
+      {
+        "absolute_throughput_gain": 0.14833333333333332,
+        "layout_seed": 203,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.5816993464052287,
+        "workload": "abrupt"
+      },
+      {
+        "absolute_throughput_gain": 0.00833333333333336,
+        "layout_seed": 204,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.025380710659898557,
+        "workload": "abrupt"
+      },
+      {
+        "absolute_throughput_gain": 0.008333333333333304,
+        "layout_seed": 205,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.02793296089385465,
+        "workload": "abrupt"
+      },
+      {
+        "absolute_throughput_gain": 0.013333333333333308,
+        "layout_seed": 206,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.037209302325581325,
+        "workload": "abrupt"
+      },
+      {
+        "absolute_throughput_gain": -0.04166666666666663,
+        "layout_seed": 207,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": -0.1288659793814432,
+        "workload": "abrupt"
+      },
+      {
+        "absolute_throughput_gain": 0.018333333333333313,
+        "layout_seed": 208,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.059459459459459386,
+        "workload": "abrupt"
+      },
+      {
+        "absolute_throughput_gain": 0.07833333333333337,
+        "layout_seed": 209,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.2814371257485031,
+        "workload": "abrupt"
+      },
+      {
+        "absolute_throughput_gain": 0.025000000000000022,
+        "layout_seed": 210,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.08021390374331558,
+        "workload": "abrupt"
+      },
+      {
+        "absolute_throughput_gain": 0.06666666666666665,
+        "layout_seed": 211,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.2083333333333333,
+        "workload": "abrupt"
+      },
+      {
+        "absolute_throughput_gain": 0.015000000000000013,
+        "layout_seed": 212,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.04500000000000004,
+        "workload": "abrupt"
+      },
+      {
+        "absolute_throughput_gain": 0.06666666666666671,
+        "layout_seed": 201,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.2259887005649719,
+        "workload": "recurring"
+      },
+      {
+        "absolute_throughput_gain": 0.043333333333333335,
+        "layout_seed": 202,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.1625,
+        "workload": "recurring"
+      },
+      {
+        "absolute_throughput_gain": 0.023333333333333317,
+        "layout_seed": 203,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.07291666666666662,
+        "workload": "recurring"
+      },
+      {
+        "absolute_throughput_gain": 0.03500000000000003,
+        "layout_seed": 204,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.1065989847715737,
+        "workload": "recurring"
+      },
+      {
+        "absolute_throughput_gain": 0.05833333333333335,
+        "layout_seed": 205,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.17948717948717952,
+        "workload": "recurring"
+      },
+      {
+        "absolute_throughput_gain": 0.03333333333333338,
+        "layout_seed": 206,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.12422360248447224,
+        "workload": "recurring"
+      },
+      {
+        "absolute_throughput_gain": 0.00666666666666671,
+        "layout_seed": 207,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.02259887005649732,
+        "workload": "recurring"
+      },
+      {
+        "absolute_throughput_gain": 0.0,
+        "layout_seed": 208,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.0,
+        "workload": "recurring"
+      },
+      {
+        "absolute_throughput_gain": 0.043333333333333335,
+        "layout_seed": 209,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.16455696202531647,
+        "workload": "recurring"
+      },
+      {
+        "absolute_throughput_gain": 0.0,
+        "layout_seed": 210,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.0,
+        "workload": "recurring"
+      },
+      {
+        "absolute_throughput_gain": 0.026666666666666672,
+        "layout_seed": 211,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.08163265306122451,
+        "workload": "recurring"
+      },
+      {
+        "absolute_throughput_gain": 0.00833333333333336,
+        "layout_seed": 212,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.023809523809523885,
+        "workload": "recurring"
+      }
+    ],
+    "eligible_agent_counts": [
+      24
+    ],
+    "eligible_maps": [
+      "three_corridor",
+      "two_corridor"
+    ],
+    "mean_relative_throughput_gain": 0.06345069603118199,
+    "median_relative_throughput_gain": 0.04798996698269074,
+    "n_paired_seeds": 12,
+    "paired_bootstrap_ci95": [
+      0.027447980936575706,
+      0.104256963825897
+    ],
+    "per_seed_effects": [
+      0.16794016589668784,
+      0.055621707762868094,
+      0.2214934818980256,
+      0.021670882046021373,
+      0.09390440363716437,
+      0.04035822620251339,
+      -0.02656677733123647,
+      0.039417534417534414,
+      0.07975554642956528,
+      -0.0009413561055148199,
+      0.06933692246614731,
+      -0.0005823849455924698
+    ],
+    "proposed": "betg_25",
+    "sign_flip_pvalue": 0.005859375
+  }
+}

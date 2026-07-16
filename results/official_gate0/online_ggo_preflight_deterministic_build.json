@@ -1,0 +1,29 @@
+{
+  "blockers": [],
+  "checks": {
+    "cmake_available": true,
+    "cxx_available": true,
+    "eigen_submodule": true,
+    "linux_x86_64": true,
+    "make_available": true,
+    "minidnn_submodule": true,
+    "period_on_module": true,
+    "pinned_revision_available": true,
+    "pybind11_submodule": true,
+    "python_3_9": true,
+    "source_present": true
+  },
+  "machine": "x86_64",
+  "notes": [
+    "Official reference builds use Ubuntu 20.04, Python 3.9 and x86_64 Singularity.",
+    "Boost 1.71 and the pinned Python requirements still need verification inside the container.",
+    "Audit action channels on an asymmetric map: Python observations use R,U,L,D while C++ weights use R,D,L,U.",
+    "The repository does not ship the trained OnlineGGO CMA-ES checkpoint."
+  ],
+  "platform": "Linux",
+  "python": "3.9.25",
+  "ready_to_build": true,
+  "ready_to_run": true,
+  "repository": "/root/autodl-tmp/dai/research_workspace/external/OnlineGGO",
+  "revision": "ff6d830e2fd5bf85ccbb72eaec0fb8df1cf1c256"
+}

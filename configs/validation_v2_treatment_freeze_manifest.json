@@ -1,0 +1,50 @@
+{
+  "schema": "dai.validation-v2-treatment-freeze/v1",
+  "status": "frozen_before_first_validation_v2_run",
+  "frozen_at": "2026-07-14T13:15:17+08:00",
+  "source_development_artifact": {
+    "path": "results/official_gate0/claim_full_dev10_h2000_v7.json",
+    "sha256": "d971c23983bb9e2b1bc517cea0db19fd5da5bc97a16b6a2aa3a777c06b7ff9f7"
+  },
+  "treatment_source": {
+    "src/dai_lmapf/claim_runner.py": "f22f75bade792e5723367af91d15c9301206b42b7a28f58600375ccbb691bd7c",
+    "scripts/run_claim_aware_budgeted_validation.py": "93a0c9f7e97e64b1b89264b207e8a7a3505522a58f2a9cbaeb5f30bfb921e57f",
+    "scripts/run_validation_v2_matrix.sh": "7291af5da11bd406e8dd65f27cb773d97f084ca184853f869f07c705589cbb27"
+  },
+  "protocol": {
+    "configs/claim_validation_protocol_v2.json": "98e8a99a8ad112b1b7024b28b21d141f3e471610a38b89d68f9248065fde475f",
+    "reports/PROTOCOL_AMENDMENT_VALIDATION_V2.md": "6a1d5cd3a89efb64b2d25b93e943a340d7fccee2bbd56b53b35ec523eeef8843"
+  },
+  "checkpoint": {
+    "file_sha256": "e4d918075c9ea0e5be795572c16c64a843da2780294a407a190b989298008c8d",
+    "parameter_sha256": "6f95c14a6afad6484a525f68e9809cf7c8a86fe48878a3d80abea67dd94abbac"
+  },
+  "simulator": {
+    "period_on_sim_sha256": "9e4b54722d67598f13f1bc2d4d0fb4121a94f79962923c184c1d269225e8c1a5"
+  },
+  "maps": {
+    "warehouse_small_narrow_kiva.map": "866e664553959fb44af359276885e2e72192eaf36fd0f4abde3726474703cbb6",
+    "warehouse_small_kiva.map": "0e597b0c8ec25414d96bf2080ff5a60bbd3bb8f33f3622965807b7746f8a27dd"
+  },
+  "development_sentinel": {
+    "status": "four_of_four_complete_and_structurally_passed",
+    "runs": 156,
+    "narrow_r020_sha256": "05140df6ba515374ed78fc5466f0c4f45839e44d45152c09f0a58a3470a0e513",
+    "narrow_r035_sha256": "0909b770efbbfc6aacb3fe4c14cac36b281d82ae096e3724d075d5644886e450",
+    "regular_r020_sha256": "1fdde46881dee5eaea5fbdd84023ddbd2504f526bd4cd507500fce4be07863ec",
+    "regular_r035_sha256": "6d50aef8567d65a408972fa26d13f3d3335247feb0bdea0ee840218d999e0b66"
+  },
+  "prelaunch_audit": {
+    "local_tests": 153,
+    "local_tests_skipped_for_missing_linux_backend": 10,
+    "remote_core_tests": 42,
+    "fresh_seed_top_level_result_hits": [],
+    "fresh_seed_vector_previously_executed": false
+  },
+  "development_only_ablation": {
+    "method": "random_memory_B25",
+    "decision": "excluded_from_formal_family",
+    "artifact_sha256": "ac8f186cf4441b3e130e3e5dcd5057196b9ab4a892d5aeeb90482ccfb4553a09"
+  },
+  "note": "Analysis implementation may be audited after launch; treatment, seeds, maps, parameters, integrity rules, and decision thresholds are frozen here."
+}

@@ -1,0 +1,30 @@
+{
+  "schema_version": "1",
+  "purpose": "locked local mechanism validation; still not public-benchmark evidence",
+  "horizon_steps": 600,
+  "decision_interval_steps": 5,
+  "guidance_scale": 5.0,
+  "budget_mode": "token_fraction_for_deterministic_smoke; wall-clock is logged but not fed back",
+  "maps": ["two_corridor", "three_corridor", "open"],
+  "agent_counts": [16, 24],
+  "workloads": ["static", "abrupt", "recurring"],
+  "seeds": [100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111],
+  "methods": [
+    "shortest",
+    "always_refresh",
+    "always_reuse",
+    "periodic_20",
+    "periodic_50",
+    "drift_25",
+    "drift_10",
+    "betg_25",
+    "betg_10"
+  ],
+  "primary_comparison": {
+    "proposed": "betg_25",
+    "baseline": "periodic_20",
+    "dynamic_workloads": ["abrupt", "recurring"],
+    "maps": ["two_corridor", "three_corridor"],
+    "agent_counts": [24]
+  }
+}

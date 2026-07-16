@@ -1,0 +1,6 @@
+include "config/traffic_mapf/period_online/warehouse_small_narrow_dist_sigma.gin"
+
+experiment.name = "trafficMAPF wnarrow periodical on DAI 2k pilot"
+
+Manager.max_evals = 2000
+TrafficMAPFManager.n_evals = 1

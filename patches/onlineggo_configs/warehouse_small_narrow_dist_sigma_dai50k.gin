@@ -1,0 +1,9 @@
+include "config/traffic_mapf/period_online/warehouse_small_narrow_dist_sigma.gin"
+
+experiment.name = "trafficMAPF wnarrow periodical on DAI 50k final"
+
+# Used only after the 10k held-out gate passes. This deliberately preserves
+# the resumed pilot's one-rollout CMA-ES objective; robustness is assessed by
+# multi-seed fixed-tape validation rather than changing the objective mid-run.
+Manager.max_evals = 50000
+TrafficMAPFManager.n_evals = 1

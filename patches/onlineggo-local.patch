@@ -1,0 +1,4232 @@
+diff --git a/CMAES/env_search/competition/update_model/utils.py b/CMAES/env_search/competition/update_model/utils.py
+index 9dacc4a..ce1a11f 100644
+--- a/CMAES/env_search/competition/update_model/utils.py
++++ b/CMAES/env_search/competition/update_model/utils.py
+@@ -32,9 +32,9 @@ class Map:
+                     line = f.readline().strip()
+                     assert len(line) == self.width
+                     for col, loc in enumerate(line):
+-                        if loc == "e":
++                        if loc in {"e", "E"}:
+                             self.end_points_ids.append([row, col])
+-                        if loc == "w":
++                        if loc in {"w", "W"}:
+                             self.home_loc_ids.append([row, col])
+                         # obstacle
+                         if loc == "@" or loc == "T":
+@@ -49,9 +49,9 @@ class Map:
+                     line = map_json["layout"][row]
+                     assert len(line) == self.width
+                     for col, loc in enumerate(line):
+-                        if loc == "e":
++                        if loc in {"e", "E"}:
+                             self.end_points_ids.append([row, col])
+-                        if loc == "w":
++                        if loc in {"w", "W"}:
+                             self.home_loc_ids.append([row, col])
+                         # obstacle
+                         if loc == "@" or loc == "T":
+diff --git a/CMAES/env_search/iterative_update/envs/trafficflow_online_env.py b/CMAES/env_search/iterative_update/envs/trafficflow_online_env.py
+index def1b68..592a740 100644
+--- a/CMAES/env_search/iterative_update/envs/trafficflow_online_env.py
++++ b/CMAES/env_search/iterative_update/envs/trafficflow_online_env.py
+@@ -4,15 +4,21 @@ from env_search.utils import min_max_normalize, load_pibt_default_config, load_w
+ from env_search.utils.logging import get_current_time_str, get_hash_file_name
+ from env_search.utils.task_generator import generate_task_and_agent
+ from env_search.iterative_update.envs.utils import visualize_simulation
++import hashlib
++import math
+ import numpy as np
+ import os
+ from gymnasium import spaces
+ import json
++import re
+ import time
+ import subprocess
+ import gc
+ 
+-from simulators.trafficMAPF_on.period_on_sim import period_on_sim
++from simulators.trafficMAPF_on.period_on_sim import (
++    generate_kiva_saturated_goal_tape,
++    period_on_sim,
++)
+ from env_search.traffic_mapf.config import TrafficMAPFConfig
+ from env_search.iterative_update.envs.env import REDUNDANT_COMPETITION_KEYS
+ import shutil
+@@ -22,6 +28,284 @@ DIRECTION2ID = {
+     "R":0, "D":3, "L":2, "U":1, "W":4
+ }
+ 
++DAI_TRACE_SCHEMA_VERSION = "dai.onlineggo.trace/v3"
++DAI_WINDOW_INTERVAL_SEMANTICS = (
++    "(window_start_timestep,window_end_timestep]"
++)
++DAI_EVENT_INTERVAL_SEMANTICS = (
++    "(event_start_exclusive,window_end_timestep]"
++)
++DAI_PLANNER_TIME_SEMANTICS = (
++    "steady_clock unless timed_out; timeout uses configured limit"
++)
++DAI_SEED_SCHEMA_VERSION = "dai.seed-split/v1"
++DAI_TASK_TAPE_SCHEMA_VERSION = "dai.saturated-goal-tape/v1"
++DAI_TASK_TAPE_ID_SEMANTICS = (
++    "agent-major contiguous offset plus per-agent tape index"
++)
++DAI_TASK_TAPE_FINGERPRINT_SEMANTICS = (
++    "fnv1a64(schema,agent_count,agent_id,start_loc,length,flat_goal_loc),little-endian-u64"
++)
++DAI_ABSOLUTE_TASK_TAPE_SCHEMA_VERSION = "dai.kiva-absolute-release-tape/v1"
++DAI_ABSOLUTE_TASK_TAPE_MODE = "absolute_release_queue_per_agent"
++DAI_ABSOLUTE_TASK_TAPE_FINGERPRINT_SEMANTICS = (
++    "fnv1a64(schema,agent_count,agent_id,start_loc,length,"
++    "flat_goal_loc,release_timestep),little-endian-u64"
++)
++DAI_ABSOLUTE_TASK_TAPE_RELEASE_SEMANTICS = (
++    "r=0 before first plan; r=t>0 after the move ending at t and before "
++    "the decision at t; released tasks enter a per-agent FIFO backlog"
++)
++_UINT32_MAX = (1 << 32) - 1
++_UINT64_MASK = (1 << 64) - 1
++
++
++def _dai_derive_seed(root_seed, stream_id):
++    """Mirror the simulator's versioned SplitMix64 stream derivation."""
++    value = (
++        int(root_seed)
++        + 0x9E3779B97F4A7C15 * (int(stream_id) + 1)
++    ) & _UINT64_MASK
++    value = (
++        (value ^ (value >> 30)) * 0xBF58476D1CE4E5B9
++    ) & _UINT64_MASK
++    value = (
++        (value ^ (value >> 27)) * 0x94D049BB133111EB
++    ) & _UINT64_MASK
++    value ^= value >> 31
++    return (value ^ (value >> 32)) & _UINT32_MAX
++
++
++def _normalize_dai_fixed_goal_tape(goal_tape, *, num_agents, map_size):
++    """Return a defensive, integer-only copy of a per-agent goal tape."""
++    if goal_tape is None:
++        return None
++    if isinstance(goal_tape, (str, bytes)):
++        raise TypeError("fixed_goal_tape must be a nested sequence")
++    try:
++        agent_sequences = list(goal_tape)
++    except TypeError as exc:
++        raise TypeError("fixed_goal_tape must be a nested sequence") from exc
++    if len(agent_sequences) != num_agents:
++        raise ValueError(
++            "fixed_goal_tape must contain exactly one sequence per agent"
++        )
++    normalized = []
++    for agent_id, sequence in enumerate(agent_sequences):
++        if isinstance(sequence, (str, bytes)):
++            raise TypeError(
++                f"fixed_goal_tape[{agent_id}] must be a goal sequence"
++            )
++        try:
++            goals = list(sequence)
++        except TypeError as exc:
++            raise TypeError(
++                f"fixed_goal_tape[{agent_id}] must be a goal sequence"
++            ) from exc
++        if not goals:
++            raise ValueError("fixed goal tape sequences must be non-empty")
++        normalized_goals = []
++        for tape_index, goal in enumerate(goals):
++            if isinstance(goal, (bool, np.bool_)) or not isinstance(
++                goal, (int, np.integer)
++            ):
++                raise TypeError(
++                    "fixed goal locations must be flattened integer map IDs; "
++                    f"received {goal!r} for agent {agent_id}, index {tape_index}"
++                )
++            goal = int(goal)
++            if goal < 0 or goal >= map_size:
++                raise ValueError(
++                    f"fixed goal location {goal} is outside the flattened map"
++                )
++            normalized_goals.append(goal)
++        normalized.append(normalized_goals)
++    return normalized
++
++
++def _normalize_dai_start_locations(start_locations, *, num_agents, map_size):
++    if start_locations is None:
++        return None
++    if isinstance(start_locations, (str, bytes)):
++        raise TypeError("fixed_goal_tape_start_locations must be a sequence")
++    try:
++        locations = list(start_locations)
++    except TypeError as exc:
++        raise TypeError(
++            "fixed_goal_tape_start_locations must be a sequence"
++        ) from exc
++    if len(locations) != num_agents:
++        raise ValueError(
++            "fixed_goal_tape_start_locations must contain one start per agent"
++        )
++    normalized = []
++    for agent_id, location in enumerate(locations):
++        if isinstance(location, (bool, np.bool_)) or not isinstance(
++            location, (int, np.integer)
++        ):
++            raise TypeError(
++                f"fixed start for agent {agent_id} must be a flattened integer"
++            )
++        location = int(location)
++        if location < 0 or location >= map_size:
++            raise ValueError(f"fixed start location {location} is outside the map")
++        normalized.append(location)
++    return normalized
++
++
++def _dai_fixed_goal_tape_sha256(start_locations, goal_tape):
++    canonical = json.dumps(
++        {
++            "schema_version": DAI_TASK_TAPE_SCHEMA_VERSION,
++            "start_locations": start_locations,
++            "goal_tape": goal_tape,
++        },
++        allow_nan=False,
++        separators=(",", ":"),
++        sort_keys=True,
++    )
++    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
++
++
++def _dai_fixed_goal_tape_fnv1a64(start_locations, goal_tape):
++    digest = 14695981039346656037
++
++    def add_byte(value):
++        nonlocal digest
++        digest ^= value
++        digest = (digest * 1099511628211) & _UINT64_MASK
++
++    def add_uint64(value):
++        for byte_index in range(8):
++            add_byte((int(value) >> (8 * byte_index)) & 0xff)
++
++    for byte in DAI_TASK_TAPE_SCHEMA_VERSION.encode("ascii"):
++        add_byte(byte)
++    add_uint64(len(goal_tape))
++    for agent_id, sequence in enumerate(goal_tape):
++        add_uint64(agent_id)
++        add_uint64(start_locations[agent_id])
++        add_uint64(len(sequence))
++        for goal_location in sequence:
++            add_uint64(goal_location)
++    return f"{digest:016x}"
++
++
++def _normalize_dai_absolute_task_tape(
++    task_tape, *, num_agents, map_size, horizon_steps
++):
++    """Return a defensive copy of per-agent ``[goal, release]`` records."""
++    if task_tape is None:
++        return None
++    if isinstance(task_tape, (str, bytes)):
++        raise TypeError("absolute_task_tape must be a nested sequence")
++    try:
++        agent_sequences = list(task_tape)
++    except TypeError as exc:
++        raise TypeError("absolute_task_tape must be a nested sequence") from exc
++    if len(agent_sequences) != num_agents:
++        raise ValueError(
++            "absolute_task_tape must contain exactly one sequence per agent"
++        )
++    normalized = []
++    for agent_id, sequence in enumerate(agent_sequences):
++        if isinstance(sequence, (str, bytes)):
++            raise TypeError(
++                f"absolute_task_tape[{agent_id}] must be a task sequence"
++            )
++        try:
++            entries = list(sequence)
++        except TypeError as exc:
++            raise TypeError(
++                f"absolute_task_tape[{agent_id}] must be a task sequence"
++            ) from exc
++        if not entries:
++            raise ValueError("absolute task-tape sequences must be non-empty")
++        previous_release = -1
++        normalized_entries = []
++        for tape_index, entry in enumerate(entries):
++            if isinstance(entry, (str, bytes)):
++                raise TypeError("absolute task entries must be [goal, release]")
++            try:
++                values = list(entry)
++            except TypeError as exc:
++                raise TypeError(
++                    "absolute task entries must be [goal, release]"
++                ) from exc
++            if len(values) != 2:
++                raise ValueError("absolute task entries must be [goal, release]")
++            goal, release_timestep = values
++            if isinstance(goal, (bool, np.bool_)) or not isinstance(
++                goal, (int, np.integer)
++            ):
++                raise TypeError(
++                    "absolute goal locations must be flattened integers; "
++                    f"received {goal!r} for agent {agent_id}, index {tape_index}"
++                )
++            if isinstance(release_timestep, (bool, np.bool_)) or not isinstance(
++                release_timestep, (int, np.integer)
++            ):
++                raise TypeError("absolute release timesteps must be integers")
++            goal = int(goal)
++            release_timestep = int(release_timestep)
++            if goal < 0 or goal >= map_size:
++                raise ValueError(
++                    f"absolute goal location {goal} is outside the flattened map"
++                )
++            if release_timestep < 0 or release_timestep >= horizon_steps:
++                raise ValueError(
++                    f"release timestep {release_timestep} is outside "
++                    f"[0, {horizon_steps})"
++                )
++            if release_timestep < previous_release:
++                raise ValueError(
++                    "absolute release timesteps must be nondecreasing per agent"
++                )
++            normalized_entries.append([goal, release_timestep])
++            previous_release = release_timestep
++        normalized.append(normalized_entries)
++    return normalized
++
++
++def _dai_absolute_task_tape_sha256(start_locations, task_tape):
++    canonical = json.dumps(
++        {
++            "schema_version": DAI_ABSOLUTE_TASK_TAPE_SCHEMA_VERSION,
++            "start_locations": start_locations,
++            "absolute_task_tape": task_tape,
++        },
++        allow_nan=False,
++        separators=(",", ":"),
++        sort_keys=True,
++    )
++    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
++
++
++def _dai_absolute_task_tape_fnv1a64(start_locations, task_tape):
++    digest = 14695981039346656037
++
++    def add_byte(value):
++        nonlocal digest
++        digest ^= value
++        digest = (digest * 1099511628211) & _UINT64_MASK
++
++    def add_uint64(value):
++        for byte_index in range(8):
++            add_byte((int(value) >> (8 * byte_index)) & 0xff)
++
++    for byte in DAI_ABSOLUTE_TASK_TAPE_SCHEMA_VERSION.encode("ascii"):
++        add_byte(byte)
++    add_uint64(len(task_tape))
++    for agent_id, sequence in enumerate(task_tape):
++        add_uint64(agent_id)
++        add_uint64(start_locations[agent_id])
++        add_uint64(len(sequence))
++        for goal_location, release_timestep in sequence:
++            add_uint64(goal_location)
++            add_uint64(release_timestep)
++    return f"{digest:016x}"
++
++
+ class TrafficFlowOnlineEnv:
+     '''Env for [p-on]+GPIBT'''
+     def __init__(
+@@ -34,8 +318,9 @@ class TrafficFlowOnlineEnv:
+         assert(self.config.update_gg_interval > 0)
+         
+         self.comp_map = Map(self.config.map_path)
+-        self.rng = np.random.default_rng(seed=seed)
+-        self.seed = seed
++        self.seed = self._normalize_episode_seed(seed)
++        self.rng = np.random.default_rng(seed=self.seed)
++        self._effective_episode_seed = self.seed
+ 
+         # Use CNN observation
+         h, w = self.comp_map.height, self.comp_map.width
+@@ -43,6 +328,1007 @@ class TrafficFlowOnlineEnv:
+                                             high=np.inf,
+                                             shape=(10, h, w))
+         self.lb, self.ub = (0.1, 100)
++
++        self._dai_last_trace_end = None
++        self._dai_last_event_id = -1
++        self._dai_last_event_timestep = -1
++        self._dai_last_route_build_id = -1
++        self._dai_route_exposed_task_ids = set()
++        self._dai_last_distribution_update_timestep = -1
++        self._dai_last_map_weights_revision = None
++        self._dai_validated_applied_guidance_sha256 = None
++        self._dai_map_revision_metadata = {}
++        self._dai_last_num_task_finished = 0
++        self._dai_pending_guidance_metadata = None
++        self._dai_last_applied_guidance_sha256 = None
++        self._dai_expected_goal_tape = None
++        self._dai_expected_goal_tape_start_locations = None
++        self._dai_expected_goal_tape_sha256 = ""
++        self._dai_expected_goal_tape_fnv1a64 = ""
++        self._dai_last_tape_assigned_prefix = None
++        self._dai_last_tape_completed_prefix = None
++        self._dai_last_tape_released_prefix = None
++        self._dai_expected_absolute_task_tape = None
++        self._dai_expected_absolute_task_tape_start_locations = None
++        self._dai_expected_absolute_task_tape_sha256 = ""
++        self._dai_expected_absolute_task_tape_fnv1a64 = ""
++        self._dai_absolute_assignment_timestamps = {}
++        self._dai_absolute_scored_completion_baseline = None
++        self._dai_current_absolute_completed_prefix = None
++
++    @staticmethod
++    def _hash_dai_guidance(weights):
++        """Hash the exact flattened weight vector passed to the simulator."""
++        canonical = json.dumps(
++            np.asarray(weights, dtype=np.float64).reshape(-1).tolist(),
++            allow_nan=False,
++            separators=(",", ":"),
++        )
++        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
++
++    @staticmethod
++    def _normalize_episode_seed(seed):
++        if (
++            isinstance(seed, (bool, np.bool_))
++            or not isinstance(seed, (int, np.integer))
++        ):
++            raise TypeError("episode seed must be an integer")
++        seed = int(seed)
++        if seed < 0 or seed > _UINT32_MAX:
++            raise ValueError("episode seed must fit in uint32")
++        return seed
++
++    def set_dai_guidance_metadata(self, *, version, sha256):
++        """Attach a one-shot external guidance identity to the next step.
++
++        ``sha256`` may identify an external policy/checkpoint. The trace also
++        records ``applied_guidance_sha256`` for the exact normalized weights
++        sent to C++, so those two identities cannot be accidentally conflated.
++        """
++        if isinstance(version, bool) or not isinstance(version, int) or version < 0:
++            raise ValueError("guidance version must be a non-negative integer")
++        if not isinstance(sha256, str) or re.fullmatch(r"[0-9a-f]{64}", sha256) is None:
++            raise ValueError("guidance sha256 must be 64 lowercase hex characters")
++        if self._dai_pending_guidance_metadata is not None:
++            raise RuntimeError("guidance metadata is already pending for the next step")
++        self._dai_pending_guidance_metadata = (version, sha256)
++
++    @staticmethod
++    def _dai_require_int(value, field, minimum=0):
++        if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
++            raise ValueError(
++                f"DAI trace field {field!r} must be an integer >= {minimum}"
++            )
++        return value
++
++    def _dai_validate_locations(self, locations, field):
++        if not isinstance(locations, list) or len(locations) != self.config.num_agents:
++            raise ValueError(
++                f"DAI trace field {field!r} must contain one location per agent"
++            )
++        for index, location in enumerate(locations):
++            self._dai_validate_location(location, f"{field}[{index}]")
++
++    def _dai_validate_location(self, location, field):
++        if not isinstance(location, list) or len(location) != 2:
++            raise ValueError(f"DAI trace field {field!r} must be [row, col]")
++        row = self._dai_require_int(location[0], f"{field}[0]")
++        col = self._dai_require_int(location[1], f"{field}[1]")
++        if row >= self.comp_map.height or col >= self.comp_map.width:
++            raise ValueError(f"DAI trace field {field!r} is outside the map")
++
++    def _dai_validate_absolute_task_tape(self, task_tape, events, trace_end):
++        keys = {
++            "schema_version",
++            "enabled",
++            "mode",
++            "manifest_sha256",
++            "content_fnv1a64",
++            "start_locations",
++            "per_agent_lengths",
++            "released_prefix_lengths",
++            "assigned_prefix_lengths",
++            "completed_prefix_lengths",
++            "total_tasks",
++            "all_released",
++            "all_completed",
++            "online_workload_rng_draws",
++            "task_id_semantics",
++            "fingerprint_semantics",
++            "release_timestep_semantics",
++        }
++        if not isinstance(task_tape, dict) or set(task_tape) != keys:
++            raise ValueError("DAI absolute task-tape metadata has an invalid schema")
++        if self._dai_expected_absolute_task_tape is None:
++            raise RuntimeError(
++                "C++ enabled an absolute task tape without a Python manifest"
++            )
++        expected_scalars = {
++            "schema_version": DAI_ABSOLUTE_TASK_TAPE_SCHEMA_VERSION,
++            "enabled": True,
++            "mode": DAI_ABSOLUTE_TASK_TAPE_MODE,
++            "manifest_sha256": self._dai_expected_absolute_task_tape_sha256,
++            "content_fnv1a64": self._dai_expected_absolute_task_tape_fnv1a64,
++            "start_locations": (
++                self._dai_expected_absolute_task_tape_start_locations
++            ),
++            "task_id_semantics": DAI_TASK_TAPE_ID_SEMANTICS,
++            "fingerprint_semantics": (
++                DAI_ABSOLUTE_TASK_TAPE_FINGERPRINT_SEMANTICS
++            ),
++            "release_timestep_semantics": (
++                DAI_ABSOLUTE_TASK_TAPE_RELEASE_SEMANTICS
++            ),
++            "online_workload_rng_draws": 0,
++        }
++        for field, expected in expected_scalars.items():
++            if task_tape[field] != expected:
++                raise RuntimeError(
++                    f"absolute task-tape field {field!r} does not match "
++                    "the registered manifest/protocol"
++                )
++        if not isinstance(task_tape["all_released"], bool) or not isinstance(
++            task_tape["all_completed"], bool
++        ):
++            raise ValueError("absolute tape completion markers must be boolean")
++
++        expected_lengths = [
++            len(sequence) for sequence in self._dai_expected_absolute_task_tape
++        ]
++        if task_tape["per_agent_lengths"] != expected_lengths:
++            raise RuntimeError("absolute task-tape lengths do not match")
++        if task_tape["total_tasks"] != sum(expected_lengths):
++            raise RuntimeError("absolute task-tape total does not match")
++
++        released_prefix = task_tape["released_prefix_lengths"]
++        assigned_prefix = task_tape["assigned_prefix_lengths"]
++        completed_prefix = task_tape["completed_prefix_lengths"]
++        for field, prefixes in (
++            ("released_prefix_lengths", released_prefix),
++            ("assigned_prefix_lengths", assigned_prefix),
++            ("completed_prefix_lengths", completed_prefix),
++        ):
++            if (
++                not isinstance(prefixes, list)
++                or len(prefixes) != self.config.num_agents
++                or any(type(prefix) is not int or prefix < 0 for prefix in prefixes)
++            ):
++                raise ValueError(
++                    f"DAI absolute task-tape {field} must contain one "
++                    "non-negative integer per agent"
++                )
++
++        # Unlike assignment and completion, release exposure is a pure function
++        # of absolute simulator time.  This equality is the central cross-method
++        # validity check, not merely a monotonicity check.
++        expected_released = [
++            sum(
++                release_timestep <= trace_end
++                for _, release_timestep in sequence
++            )
++            for sequence in self._dai_expected_absolute_task_tape
++        ]
++        if released_prefix != expected_released:
++            raise RuntimeError(
++                "released prefixes are not the exact manifest prefix due at "
++                "the current absolute timestep"
++            )
++        if task_tape["all_released"] != all(
++            released_prefix[index] == expected_lengths[index]
++            for index in range(self.config.num_agents)
++        ):
++            raise ValueError("all_released contradicts the release prefixes")
++        if task_tape["all_completed"] != all(
++            completed_prefix[index] == expected_lengths[index]
++            for index in range(self.config.num_agents)
++        ):
++            raise ValueError("all_completed contradicts the completed prefixes")
++
++        previous_released = self._dai_last_tape_released_prefix
++        previous_assigned = self._dai_last_tape_assigned_prefix
++        previous_completed = self._dai_last_tape_completed_prefix
++        if previous_released is None:
++            previous_released = [0] * self.config.num_agents
++            previous_assigned = [0] * self.config.num_agents
++            previous_completed = [0] * self.config.num_agents
++        if any(
++            not previous_released[agent_id] <= released_prefix[agent_id]
++            <= expected_lengths[agent_id]
++            for agent_id in range(self.config.num_agents)
++        ):
++            raise ValueError("absolute released prefixes decreased or overflowed")
++        if any(
++            not previous_assigned[agent_id] <= assigned_prefix[agent_id]
++            <= released_prefix[agent_id]
++            for agent_id in range(self.config.num_agents)
++        ):
++            raise ValueError("absolute assigned prefixes are invalid")
++        if any(
++            not previous_completed[agent_id] <= completed_prefix[agent_id]
++            <= assigned_prefix[agent_id]
++            for agent_id in range(self.config.num_agents)
++        ):
++            raise ValueError("absolute completed prefixes are invalid")
++
++        offsets = []
++        running_offset = 0
++        for length in expected_lengths:
++            offsets.append(running_offset)
++            running_offset += length
++        reconstructed_released = list(previous_released)
++        reconstructed_assigned = list(previous_assigned)
++        reconstructed_completed = list(previous_completed)
++        assignment_timestamps = dict(
++            getattr(self, "_dai_absolute_assignment_timestamps", {})
++        )
++        for event in events:
++            agent_id = event["agent_id"]
++            if event["event_type"] == "released":
++                tape_index = reconstructed_released[agent_id]
++                if tape_index >= expected_lengths[agent_id]:
++                    raise ValueError("DAI task event releases beyond the tape")
++                expected_release = self._dai_expected_absolute_task_tape[
++                    agent_id
++                ][tape_index][1]
++                if event["timestep"] != expected_release:
++                    raise ValueError(
++                        "DAI released event does not occur at its absolute time"
++                    )
++                reconstructed_released[agent_id] += 1
++            elif event["event_type"] == "assigned":
++                tape_index = reconstructed_assigned[agent_id]
++                if tape_index >= reconstructed_released[agent_id]:
++                    raise ValueError("DAI task event assigns an unreleased task")
++                if event["timestep"] < self._dai_expected_absolute_task_tape[
++                    agent_id
++                ][tape_index][1]:
++                    raise ValueError("DAI task assignment precedes release")
++                if event["task_id"] in assignment_timestamps:
++                    raise ValueError("DAI absolute task was assigned twice")
++                assignment_timestamps[event["task_id"]] = event["timestep"]
++                reconstructed_assigned[agent_id] += 1
++            elif event["event_type"] == "finished":
++                tape_index = reconstructed_completed[agent_id]
++                if tape_index >= reconstructed_assigned[agent_id]:
++                    raise ValueError("DAI task event finishes an unassigned task")
++                assigned_at = assignment_timestamps.get(event["task_id"])
++                if assigned_at is None or event["timestep"] < assigned_at:
++                    raise ValueError("DAI task finished before its assignment")
++                reconstructed_completed[agent_id] += 1
++            else:
++                raise ValueError("unexpected event type for an absolute task tape")
++
++            expected_task_id = offsets[agent_id] + tape_index
++            expected_goal = self._dai_expected_absolute_task_tape[agent_id][
++                tape_index
++            ][0]
++            expected_goal_loc = [
++                expected_goal // self.comp_map.width,
++                expected_goal % self.comp_map.width,
++            ]
++            if event["task_id"] != expected_task_id:
++                raise ValueError(
++                    "DAI absolute-tape task_id does not match agent/tape index"
++                )
++            if event["goal_loc"] != expected_goal_loc:
++                raise ValueError("DAI absolute-tape event goal does not match")
++
++        if reconstructed_released != released_prefix:
++            raise ValueError(
++                "DAI released events do not reconstruct the reported prefixes"
++            )
++        if reconstructed_assigned != assigned_prefix:
++            raise ValueError(
++                "DAI assigned events do not reconstruct the reported prefixes"
++            )
++        if reconstructed_completed != completed_prefix:
++            raise ValueError(
++                "DAI finished events do not reconstruct the reported prefixes"
++            )
++        self._dai_last_tape_released_prefix = list(released_prefix)
++        self._dai_last_tape_assigned_prefix = list(assigned_prefix)
++        self._dai_last_tape_completed_prefix = list(completed_prefix)
++        self._dai_absolute_assignment_timestamps = assignment_timestamps
++        self._dai_current_absolute_completed_prefix = list(completed_prefix)
++
++    def _dai_validate_task_tape(self, task_tape, events, trace_end=None):
++        if not isinstance(task_tape, dict):
++            raise ValueError("DAI task-tape metadata must be an object")
++        if task_tape.get("schema_version") == DAI_ABSOLUTE_TASK_TAPE_SCHEMA_VERSION:
++            if trace_end is None:
++                raise ValueError("trace_end is required for an absolute task tape")
++            self._dai_validate_absolute_task_tape(task_tape, events, trace_end)
++            return
++        if getattr(self, "_dai_expected_absolute_task_tape", None) is not None:
++            raise RuntimeError(
++                "simulator did not enable the requested absolute task tape"
++            )
++        keys = {
++            "schema_version",
++            "enabled",
++            "mode",
++            "manifest_sha256",
++            "content_fnv1a64",
++            "start_locations",
++            "per_agent_lengths",
++            "assigned_prefix_lengths",
++            "completed_prefix_lengths",
++            "total_tasks",
++            "exhausted",
++            "task_id_semantics",
++            "fingerprint_semantics",
++        }
++        if not isinstance(task_tape, dict) or set(task_tape) != keys:
++            raise ValueError("DAI task-tape metadata has an invalid schema")
++        if task_tape["schema_version"] != DAI_TASK_TAPE_SCHEMA_VERSION:
++            raise ValueError("DAI task-tape schema version is unsupported")
++        if not isinstance(task_tape["enabled"], bool):
++            raise ValueError("DAI task-tape enabled marker must be boolean")
++        if not isinstance(task_tape["exhausted"], bool):
++            raise ValueError("DAI task-tape exhausted marker must be boolean")
++        if task_tape["task_id_semantics"] != DAI_TASK_TAPE_ID_SEMANTICS:
++            raise ValueError("DAI task-tape task-id semantics do not match v1")
++        if (
++            task_tape["fingerprint_semantics"]
++            != DAI_TASK_TAPE_FINGERPRINT_SEMANTICS
++        ):
++            raise ValueError("DAI task-tape fingerprint semantics do not match v1")
++
++        expected_enabled = self._dai_expected_goal_tape is not None
++        if task_tape["enabled"] != expected_enabled:
++            raise RuntimeError(
++                "C++ fixed-goal-tape mode disagrees with the Python manifest"
++            )
++        if not expected_enabled:
++            expected_online_metadata = {
++                "mode": "online_completion_driven_rng",
++                "manifest_sha256": "",
++                "content_fnv1a64": "",
++                "start_locations": [],
++                "per_agent_lengths": [],
++                "assigned_prefix_lengths": [],
++                "completed_prefix_lengths": [],
++                "total_tasks": 0,
++                "exhausted": False,
++            }
++            for field, expected in expected_online_metadata.items():
++                if task_tape[field] != expected:
++                    raise ValueError(
++                        f"disabled DAI task-tape field {field!r} is inconsistent"
++                    )
++            self._dai_last_tape_assigned_prefix = None
++            self._dai_last_tape_completed_prefix = None
++            self._dai_last_tape_released_prefix = None
++            if any(event["event_type"] == "released" for event in events):
++                raise ValueError(
++                    "online task generation cannot emit fixed-tape release events"
++                )
++            return
++
++        if task_tape["mode"] != "saturated_backlog_per_agent":
++            raise ValueError("enabled DAI task tape must use saturated backlog mode")
++        if task_tape["exhausted"]:
++            raise RuntimeError("fixed saturated goal tape was exhausted")
++        if task_tape["manifest_sha256"] != self._dai_expected_goal_tape_sha256:
++            raise RuntimeError("fixed goal tape manifest sha256 does not match")
++        if task_tape["content_fnv1a64"] != self._dai_expected_goal_tape_fnv1a64:
++            raise RuntimeError("C++ fixed goal tape content fingerprint does not match")
++        if (
++            task_tape["start_locations"]
++            != self._dai_expected_goal_tape_start_locations
++        ):
++            raise RuntimeError("C++ fixed goal tape starts do not match the manifest")
++
++        expected_lengths = [
++            len(sequence) for sequence in self._dai_expected_goal_tape
++        ]
++        if task_tape["per_agent_lengths"] != expected_lengths:
++            raise RuntimeError("C++ fixed goal tape lengths do not match the manifest")
++        if task_tape["total_tasks"] != sum(expected_lengths):
++            raise RuntimeError("C++ fixed goal tape total does not match the manifest")
++
++        assigned_prefix = task_tape["assigned_prefix_lengths"]
++        completed_prefix = task_tape["completed_prefix_lengths"]
++        for field, prefixes in (
++            ("assigned_prefix_lengths", assigned_prefix),
++            ("completed_prefix_lengths", completed_prefix),
++        ):
++            if (
++                not isinstance(prefixes, list)
++                or len(prefixes) != self.config.num_agents
++                or any(type(prefix) is not int or prefix < 0 for prefix in prefixes)
++            ):
++                raise ValueError(
++                    f"DAI task-tape {field} must contain one non-negative "
++                    "integer per agent"
++                )
++
++        previous_assigned = self._dai_last_tape_assigned_prefix
++        previous_completed = self._dai_last_tape_completed_prefix
++        if previous_assigned is None:
++            previous_assigned = [0] * self.config.num_agents
++            previous_completed = [0] * self.config.num_agents
++        if any(
++            not previous_assigned[agent_id] <= assigned_prefix[agent_id]
++            <= expected_lengths[agent_id]
++            for agent_id in range(self.config.num_agents)
++        ):
++            raise ValueError("DAI task-tape assigned prefixes are invalid or decreased")
++        if any(
++            not previous_completed[agent_id] <= completed_prefix[agent_id]
++            <= assigned_prefix[agent_id]
++            for agent_id in range(self.config.num_agents)
++        ):
++            raise ValueError("DAI task-tape completed prefixes are invalid or decreased")
++
++        offsets = []
++        running_offset = 0
++        for length in expected_lengths:
++            offsets.append(running_offset)
++            running_offset += length
++        reconstructed_assigned = list(previous_assigned)
++        reconstructed_completed = list(previous_completed)
++        for event in events:
++            agent_id = event["agent_id"]
++            if event["event_type"] == "assigned":
++                tape_index = reconstructed_assigned[agent_id]
++                if tape_index >= expected_lengths[agent_id]:
++                    raise ValueError("DAI task event assigns beyond the fixed tape")
++                reconstructed_assigned[agent_id] += 1
++            elif event["event_type"] == "finished":
++                tape_index = reconstructed_completed[agent_id]
++                if tape_index >= reconstructed_assigned[agent_id]:
++                    raise ValueError("DAI task event finishes an unassigned tape item")
++                reconstructed_completed[agent_id] += 1
++            else:
++                raise ValueError(
++                    "saturated goal tapes cannot emit released events"
++                )
++            expected_task_id = offsets[agent_id] + tape_index
++            expected_goal = self._dai_expected_goal_tape[agent_id][tape_index]
++            expected_goal_loc = [
++                expected_goal // self.comp_map.width,
++                expected_goal % self.comp_map.width,
++            ]
++            if event["task_id"] != expected_task_id:
++                raise ValueError(
++                    "DAI fixed-tape task_id does not match agent/tape index"
++                )
++            if event["goal_loc"] != expected_goal_loc:
++                raise ValueError("DAI fixed-tape event goal does not match the tape")
++
++        if reconstructed_assigned != assigned_prefix:
++            raise ValueError(
++                "DAI assigned events do not reconstruct the reported tape prefixes"
++            )
++        if reconstructed_completed != completed_prefix:
++            raise ValueError(
++                "DAI finished events do not reconstruct the reported tape prefixes"
++            )
++        self._dai_last_tape_assigned_prefix = list(assigned_prefix)
++        self._dai_last_tape_completed_prefix = list(completed_prefix)
++
++    def _build_dai_trace(
++        self,
++        result,
++        *,
++        expect_warmup,
++        guidance_version,
++        guidance_sha256,
++        guidance_metadata_source,
++    ):
++        required_fields = {
++            "trace_schema_version",
++            "window_start_timestep",
++            "window_end_timestep",
++            "actual_executed_steps",
++            "window_interval_semantics",
++            "event_start_exclusive",
++            "event_interval_semantics",
++            "is_warmup",
++            "planner_timeout_limit_seconds",
++            "planner_time_seconds_semantics",
++            "timestep",
++            "num_task_finished",
++            "recent_events",
++            "recent_planner_times",
++            "recent_route_builds",
++            "recent_distribution_updates",
++            "map_weights_revision",
++            "route_build_trace_valid",
++            "build_flags",
++            "seed_bundle",
++            "task_tape",
++            "planner_initial_priority_order",
++            "start",
++            "actual_paths",
++            "curr_tasks",
++            "curr_task_active",
++            "curr_pos",
++            "done",
++        }
++        missing = sorted(required_fields.difference(result))
++        if missing:
++            raise RuntimeError(
++                "Simulator is missing required DAI trace fields "
++                f"{missing}; rebuild the instrumented period_on_sim module"
++            )
++        if result["trace_schema_version"] != DAI_TRACE_SCHEMA_VERSION:
++            raise RuntimeError(
++                "Unsupported DAI trace schema "
++                f"{result['trace_schema_version']!r}; expected "
++                f"{DAI_TRACE_SCHEMA_VERSION!r}"
++            )
++        if result["window_interval_semantics"] != DAI_WINDOW_INTERVAL_SEMANTICS:
++            raise ValueError("DAI trace window interval semantics do not match v1")
++        if result["event_interval_semantics"] != DAI_EVENT_INTERVAL_SEMANTICS:
++            raise ValueError("DAI trace event interval semantics do not match v1")
++        if result["planner_time_seconds_semantics"] != DAI_PLANNER_TIME_SEMANTICS:
++            raise ValueError("DAI trace planner-time semantics do not match v1")
++        expected_build_flags = {
++            "guidance": True,
++            "guidance_lns": 0,
++            "flow_guidance": False,
++            "init_pp": True,
++            "objective": 5,
++        }
++        build_flags = result["build_flags"]
++        build_flag_types_are_valid = (
++            isinstance(build_flags, dict)
++            and set(build_flags) == set(expected_build_flags)
++            and isinstance(build_flags.get("guidance"), bool)
++            and type(build_flags.get("guidance_lns")) is int
++            and isinstance(build_flags.get("flow_guidance"), bool)
++            and isinstance(build_flags.get("init_pp"), bool)
++            and type(build_flags.get("objective")) is int
++        )
++        if not build_flag_types_are_valid or build_flags != expected_build_flags:
++            raise RuntimeError(
++                "DAI route-build trace requires the main [p-on]+GPIBT build "
++                f"flags {expected_build_flags}, got {result['build_flags']!r}"
++            )
++        if result["route_build_trace_valid"] is not True:
++            raise RuntimeError("DAI route-build trace is invalid after a planner timeout")
++
++        expected_seed_bundle = {
++            "schema_version": DAI_SEED_SCHEMA_VERSION,
++            "episode_seed": self._effective_episode_seed,
++            "planner_priority_seed": _dai_derive_seed(
++                self._effective_episode_seed, 0
++            ),
++            "start_seed": _dai_derive_seed(self._effective_episode_seed, 1),
++            "task_seed": _dai_derive_seed(self._effective_episode_seed, 2),
++            "distribution_seed": _dai_derive_seed(
++                self._effective_episode_seed, 3
++            ),
++        }
++        seed_bundle = result["seed_bundle"]
++        seed_bundle_types_are_valid = (
++            isinstance(seed_bundle, dict)
++            and set(seed_bundle) == set(expected_seed_bundle)
++            and isinstance(seed_bundle.get("schema_version"), str)
++            and all(
++                type(seed_bundle.get(field)) is int
++                and 0 <= seed_bundle[field] <= _UINT32_MAX
++                for field in expected_seed_bundle
++                if field != "schema_version"
++            )
++        )
++        if not seed_bundle_types_are_valid or seed_bundle != expected_seed_bundle:
++            raise RuntimeError(
++                "Simulator seed bundle does not match the requested episode "
++                f"seed: expected {expected_seed_bundle!r}, got {seed_bundle!r}"
++            )
++
++        priority_order = result["planner_initial_priority_order"]
++        if (
++            not isinstance(priority_order, list)
++            or len(priority_order) != self.config.num_agents
++            or any(type(agent_id) is not int for agent_id in priority_order)
++            or set(priority_order) != set(range(self.config.num_agents))
++        ):
++            raise RuntimeError(
++                "planner_initial_priority_order must be a permutation of all "
++                "agent IDs"
++            )
++
++        start = self._dai_require_int(
++            result["window_start_timestep"], "window_start_timestep"
++        )
++        end = self._dai_require_int(
++            result["window_end_timestep"], "window_end_timestep"
++        )
++        actual_steps = self._dai_require_int(
++            result["actual_executed_steps"], "actual_executed_steps"
++        )
++        if end < start or actual_steps != end - start:
++            raise ValueError("DAI trace window bounds and actual steps are inconsistent")
++        if self._dai_require_int(result["timestep"], "timestep") != end:
++            raise ValueError("DAI trace timestep must equal window_end_timestep")
++        if not isinstance(result["is_warmup"], bool):
++            raise ValueError("DAI trace is_warmup must be boolean")
++        if result["is_warmup"] != expect_warmup:
++            raise ValueError("DAI trace warmup marker does not match the env call")
++
++        event_start_exclusive = result["event_start_exclusive"]
++        if isinstance(event_start_exclusive, bool) or not isinstance(
++            event_start_exclusive, int
++        ):
++            raise ValueError("DAI trace event_start_exclusive must be an integer")
++        if expect_warmup:
++            if start != 0 or event_start_exclusive != -1:
++                raise ValueError("warmup trace must start at 0 and include t=0 events")
++        else:
++            if actual_steps == 0:
++                raise ValueError("non-warmup DAI trace cannot be an empty window")
++            if self._dai_last_trace_end is None or start != self._dai_last_trace_end:
++                raise ValueError("DAI trace windows are not contiguous")
++            if event_start_exclusive != start:
++                raise ValueError("non-warmup events must use the window start as exclusive")
++
++        timeout_limit = self._dai_require_int(
++            result["planner_timeout_limit_seconds"],
++            "planner_timeout_limit_seconds",
++            minimum=1,
++        )
++        planner_times = result["recent_planner_times"]
++        if not isinstance(planner_times, list) or len(planner_times) != actual_steps:
++            raise ValueError("DAI trace must contain one planner time per executed step")
++        planner_keys = {"timestep", "seconds", "timed_out", "seconds_source"}
++        for expected_timestep, planner_time in zip(
++            range(start + 1, end + 1), planner_times
++        ):
++            if not isinstance(planner_time, dict) or set(planner_time) != planner_keys:
++                raise ValueError("DAI planner-time record has an invalid schema")
++            if self._dai_require_int(
++                planner_time["timestep"], "recent_planner_times[].timestep"
++            ) != expected_timestep:
++                raise ValueError("DAI planner-time records are missing or out of order")
++            seconds = planner_time["seconds"]
++            if (
++                isinstance(seconds, bool)
++                or not isinstance(seconds, (int, float))
++                or not math.isfinite(seconds)
++                or seconds < 0
++            ):
++                raise ValueError("DAI planner seconds must be finite and non-negative")
++            timed_out = planner_time["timed_out"]
++            if not isinstance(timed_out, bool):
++                raise ValueError("DAI planner timed_out must be boolean")
++            expected_source = "timeout_limit" if timed_out else "steady_clock"
++            if planner_time["seconds_source"] != expected_source:
++                raise ValueError("DAI planner seconds_source contradicts timed_out")
++            if timed_out and float(seconds) != float(timeout_limit):
++                raise ValueError("DAI timeout seconds must equal the configured limit")
++
++        events = result["recent_events"]
++        if not isinstance(events, list):
++            raise ValueError("DAI trace recent_events must be a list")
++        event_keys = {
++            "event_id", "agent_id", "task_id", "event_type", "timestep", "goal_loc"
++        }
++        next_event_id = self._dai_last_event_id + 1
++        latest_event_timestep = self._dai_last_event_timestep
++        for event in events:
++            if not isinstance(event, dict) or set(event) != event_keys:
++                raise ValueError("DAI event record has an invalid schema")
++            event_id = self._dai_require_int(event["event_id"], "event_id")
++            if event_id != next_event_id:
++                raise ValueError("DAI event IDs are duplicated, missing, or out of order")
++            next_event_id += 1
++            agent_id = self._dai_require_int(event["agent_id"], "agent_id")
++            if agent_id >= self.config.num_agents:
++                raise ValueError("DAI event agent_id is outside the team")
++            self._dai_require_int(event["task_id"], "task_id")
++            event_timestep = self._dai_require_int(event["timestep"], "event.timestep")
++            if not event_start_exclusive < event_timestep <= end:
++                raise ValueError("DAI event lies outside its declared interval")
++            if event_timestep < latest_event_timestep:
++                raise ValueError("DAI task-event timesteps moved backwards")
++            latest_event_timestep = event_timestep
++            if event["event_type"] not in {"released", "assigned", "finished"}:
++                raise ValueError(
++                    "DAI event_type must be released, assigned, or finished"
++                )
++            self._dai_validate_location(event["goal_loc"], "event.goal_loc")
++
++        self._dai_validate_task_tape(result["task_tape"], events, end)
++
++        num_task_finished = self._dai_require_int(
++            result["num_task_finished"], "num_task_finished"
++        )
++        if num_task_finished < self._dai_last_num_task_finished:
++            raise ValueError("DAI cumulative num_task_finished decreased")
++        self._dai_validate_locations(result["curr_tasks"], "curr_tasks")
++        curr_task_active = result["curr_task_active"]
++        if (
++            not isinstance(curr_task_active, list)
++            or len(curr_task_active) != self.config.num_agents
++            or any(not isinstance(active, bool) for active in curr_task_active)
++        ):
++            raise ValueError(
++                "DAI curr_task_active must contain one boolean per agent"
++            )
++        if self._dai_expected_absolute_task_tape is None and not all(
++            curr_task_active
++        ):
++            raise ValueError(
++                "inactive agents are supported only by absolute release tapes"
++            )
++        self._dai_validate_locations(result["curr_pos"], "curr_pos")
++        if getattr(self, "_dai_expected_absolute_task_tape", None) is not None:
++            completed_prefix = self._dai_current_absolute_completed_prefix
++            assigned_prefix = result["task_tape"]["assigned_prefix_lengths"]
++            if completed_prefix is None:
++                raise RuntimeError("absolute completed-prefix state is missing")
++            completed_total = sum(completed_prefix)
++            if expect_warmup:
++                if num_task_finished != 0:
++                    raise ValueError(
++                        "scored completion count must be zero in warmup"
++                    )
++                self._dai_absolute_scored_completion_baseline = completed_total
++            else:
++                baseline = self._dai_absolute_scored_completion_baseline
++                if baseline is None:
++                    raise RuntimeError("absolute warmup completion baseline is missing")
++                if num_task_finished != completed_total - baseline:
++                    raise ValueError(
++                        "num_task_finished does not equal the scored completed "
++                        "task-tape prefix"
++                    )
++            for agent_id, active in enumerate(curr_task_active):
++                expected_active = (
++                    assigned_prefix[agent_id] > completed_prefix[agent_id]
++                )
++                if active != expected_active:
++                    raise ValueError(
++                        "curr_task_active contradicts assigned/completed prefixes"
++                    )
++                if active:
++                    tape_index = completed_prefix[agent_id]
++                    expected_goal = self._dai_expected_absolute_task_tape[
++                        agent_id
++                    ][tape_index][0]
++                    expected_location = [
++                        expected_goal // self.comp_map.width,
++                        expected_goal % self.comp_map.width,
++                    ]
++                    if result["curr_tasks"][agent_id] != expected_location:
++                        raise ValueError(
++                            "active current task is not the front tape goal"
++                        )
++                elif result["curr_tasks"][agent_id] != result["curr_pos"][agent_id]:
++                    raise ValueError(
++                        "idle holding target must equal the current position"
++                    )
++        self._dai_validate_locations(result["start"], "start")
++        actual_paths = result["actual_paths"]
++        if not isinstance(actual_paths, list) or len(actual_paths) != self.config.num_agents:
++            raise ValueError("DAI actual_paths must contain one path per agent")
++        for agent_id, path in enumerate(actual_paths):
++            if not isinstance(path, str):
++                raise ValueError(f"DAI actual_paths[{agent_id}] must be a string")
++            actions = [] if path == "" else path.split(",")
++            if len(actions) != actual_steps or any(
++                action not in {"R", "D", "L", "U", "W"}
++                for action in actions
++            ):
++                raise ValueError(
++                    f"DAI actual_paths[{agent_id}] must contain exactly one "
++                    "valid action per executed step"
++                )
++        if not isinstance(result["done"], bool):
++            raise ValueError("DAI trace done must be boolean")
++        self._dai_require_int(guidance_version, "guidance_version")
++        if not isinstance(guidance_sha256, str) or re.fullmatch(
++            r"[0-9a-f]{64}", guidance_sha256
++        ) is None:
++            raise ValueError("DAI guidance_sha256 is invalid")
++        applied_sha256 = self._dai_last_applied_guidance_sha256
++        if not isinstance(applied_sha256, str) or re.fullmatch(
++            r"[0-9a-f]{64}", applied_sha256
++        ) is None:
++            raise ValueError("DAI applied_guidance_sha256 is invalid")
++
++        map_weights_revision = self._dai_require_int(
++            result["map_weights_revision"], "map_weights_revision"
++        )
++        if self._dai_last_map_weights_revision is None:
++            if map_weights_revision != 0:
++                raise ValueError("initial DAI map_weights_revision must be zero")
++        else:
++            weights_changed = (
++                applied_sha256 != self._dai_validated_applied_guidance_sha256
++            )
++            expected_revision = self._dai_last_map_weights_revision + int(
++                weights_changed
++            )
++            if map_weights_revision != expected_revision:
++                raise ValueError(
++                    "DAI map_weights_revision does not match the applied vector change"
++                )
++        revision_metadata = {
++            "publication_version": guidance_version,
++            "raw_guidance_sha256": guidance_sha256,
++            "applied_normalized_guidance_sha256": applied_sha256,
++        }
++        known_revision_metadata = self._dai_map_revision_metadata.get(
++            map_weights_revision
++        )
++        if known_revision_metadata is None:
++            self._dai_map_revision_metadata[map_weights_revision] = dict(
++                revision_metadata
++            )
++        elif (
++            known_revision_metadata["applied_normalized_guidance_sha256"]
++            != applied_sha256
++        ):
++            raise ValueError(
++                "DAI map revision was associated with two applied weight hashes"
++            )
++
++        route_builds = result["recent_route_builds"]
++        if not isinstance(route_builds, list):
++            raise ValueError("DAI recent_route_builds must be a list")
++        route_keys = {
++            "event_id",
++            "agent_id",
++            "task_id",
++            "goal_loc",
++            "execution_timestep",
++            "map_weights_revision",
++            "reason",
++        }
++        next_route_build_id = self._dai_last_route_build_id + 1
++        bound_route_builds = []
++        route_exposed_task_ids = set(self._dai_route_exposed_task_ids)
++        for route_build in route_builds:
++            if not isinstance(route_build, dict) or set(route_build) != route_keys:
++                raise ValueError("DAI route-build record has an invalid schema")
++            route_event_id = self._dai_require_int(
++                route_build["event_id"], "recent_route_builds[].event_id"
++            )
++            if route_event_id != next_route_build_id:
++                raise ValueError(
++                    "DAI route-build IDs are duplicated, missing, or out of order"
++                )
++            next_route_build_id += 1
++            route_agent_id = self._dai_require_int(
++                route_build["agent_id"], "recent_route_builds[].agent_id"
++            )
++            if route_agent_id >= self.config.num_agents:
++                raise ValueError("DAI route-build agent_id is outside the team")
++            route_task_id = self._dai_require_int(
++                route_build["task_id"], "recent_route_builds[].task_id"
++            )
++            if (
++                self._dai_expected_absolute_task_tape is not None
++                and route_task_id
++                not in self._dai_absolute_assignment_timestamps
++            ):
++                raise ValueError("DAI route exposure precedes task assignment")
++            self._dai_validate_location(
++                route_build["goal_loc"], "recent_route_builds[].goal_loc"
++            )
++            route_timestep = self._dai_require_int(
++                route_build["execution_timestep"],
++                "recent_route_builds[].execution_timestep",
++            )
++            if not event_start_exclusive < route_timestep <= end:
++                raise ValueError("DAI route-build event lies outside its trace window")
++            route_revision = self._dai_require_int(
++                route_build["map_weights_revision"],
++                "recent_route_builds[].map_weights_revision",
++            )
++            reason = route_build["reason"]
++            if reason not in {
++                "init_pp", "task_change", "inherited_goal_route"
++            }:
++                raise ValueError("DAI route-build reason is invalid")
++            if (
++                reason != "inherited_goal_route"
++                and route_revision != map_weights_revision
++            ):
++                raise ValueError(
++                    "DAI route-build revision does not match the active weights"
++                )
++            route_metadata = self._dai_map_revision_metadata.get(route_revision)
++            if route_metadata is None or route_revision > map_weights_revision:
++                raise ValueError(
++                    "DAI inherited route references an unknown future revision"
++                )
++            bound_route_build = dict(route_build)
++            bound_route_build.update(route_metadata)
++            bound_route_builds.append(bound_route_build)
++            route_exposed_task_ids.add(route_task_id)
++
++        # Fail at the simulator boundary, before a claim runner can silently
++        # lose a treatment cohort.  A task completed one step after assignment
++        # may be an already-satisfied zero-route task; every longer-lived
++        # absolute-tape task must have emitted at least one route exposure.
++        if self._dai_expected_absolute_task_tape is not None:
++            for event in events:
++                if event["event_type"] != "finished":
++                    continue
++                task_id = event["task_id"]
++                assigned_at = self._dai_absolute_assignment_timestamps.get(
++                    task_id
++                )
++                if assigned_at is None:
++                    raise ValueError("DAI finished task lacks assignment state")
++                if (
++                    event["timestep"] - assigned_at > 1
++                    and task_id not in route_exposed_task_ids
++                ):
++                    raise RuntimeError(
++                        "DAI finished task lacks a route exposure: "
++                        f"task_id={task_id}, assigned={assigned_at}, "
++                        f"finished={event['timestep']}"
++                    )
++                route_exposed_task_ids.discard(task_id)
++
++        distribution_updates = result["recent_distribution_updates"]
++        if not isinstance(distribution_updates, list):
++            raise ValueError("DAI recent_distribution_updates must be a list")
++        distribution_keys = {
++            "timestep",
++            "random_type",
++            "source",
++            "primary_weights",
++            "secondary_weights",
++        }
++        latest_distribution_update = self._dai_last_distribution_update_timestep
++        for update in distribution_updates:
++            if not isinstance(update, dict) or set(update) != distribution_keys:
++                raise ValueError("DAI distribution update has an invalid schema")
++            update_timestep = self._dai_require_int(
++                update["timestep"],
++                "recent_distribution_updates[].timestep",
++            )
++            if not event_start_exclusive < update_timestep <= end:
++                raise ValueError("DAI distribution update lies outside its window")
++            if update_timestep <= latest_distribution_update:
++                raise ValueError(
++                    "DAI distribution updates are duplicated or out of order"
++                )
++            latest_distribution_update = update_timestep
++            if update["source"] not in {"kiva", "online_generate"}:
++                raise ValueError("DAI distribution update source is invalid")
++            if not isinstance(update["random_type"], str):
++                raise ValueError("DAI distribution random_type must be a string")
++            for weights_field in ("primary_weights", "secondary_weights"):
++                weights = update[weights_field]
++                if not isinstance(weights, list) or any(
++                    isinstance(weight, bool)
++                    or not isinstance(weight, (int, float))
++                    or not math.isfinite(weight)
++                    or weight < 0
++                    for weight in weights
++                ):
++                    raise ValueError(
++                        f"DAI distribution {weights_field} must contain finite "
++                        "non-negative weights"
++                    )
++
++        self._dai_last_trace_end = end
++        self._dai_last_event_id = next_event_id - 1
++        self._dai_last_event_timestep = latest_event_timestep
++        self._dai_last_route_build_id = next_route_build_id - 1
++        self._dai_route_exposed_task_ids = route_exposed_task_ids
++        self._dai_last_distribution_update_timestep = latest_distribution_update
++        self._dai_last_map_weights_revision = map_weights_revision
++        self._dai_validated_applied_guidance_sha256 = applied_sha256
++        self._dai_last_num_task_finished = num_task_finished
++        trace = {field: result[field] for field in sorted(required_fields)}
++        trace.update({
++            "guidance_version": guidance_version,
++            "guidance_sha256": guidance_sha256,
++            "applied_guidance_sha256": applied_sha256,
++            "guidance_metadata_source": guidance_metadata_source,
++        })
++        trace["recent_route_builds"] = bound_route_builds
++        return trace
+     
+     def update_paths(self, agents_paths):
+         for agent_moves, agent_new_paths in zip(self.move_hists, agents_paths):
+@@ -144,7 +1430,12 @@ class TrafficFlowOnlineEnv:
+     def _gen_task_obs(self, result):
+         h, w = self.comp_map.graph.shape
+         task_usage = np.zeros((1, h, w))
++        active_mask = result.get(
++            "curr_task_active", [True] * len(result["curr_tasks"])
++        )
+         for aid, (x, y) in enumerate(result["curr_tasks"]):
++            if not active_mask[aid]:
++                continue
+             task_usage[0, x, y] += 1
+         if task_usage.sum()!=0:
+             task_usage = task_usage/task_usage.sum() * 10
+@@ -212,8 +1503,118 @@ class TrafficFlowOnlineEnv:
+ 
+     
+     def gen_sim_kwargs(self):
++        if (
++            isinstance(self.config.num_tasks_reveal, (bool, np.bool_))
++            or not isinstance(self.config.num_tasks_reveal, (int, np.integer))
++            or int(self.config.num_tasks_reveal) <= 0
++        ):
++            raise ValueError("num_tasks_reveal must be a positive integer")
++        map_size = self.comp_map.height * self.comp_map.width
++        fixed_goal_tape = _normalize_dai_fixed_goal_tape(
++            self.config.fixed_goal_tape,
++            num_agents=self.config.num_agents,
++            map_size=map_size,
++        )
++        fixed_start_locations = _normalize_dai_start_locations(
++            self.config.fixed_goal_tape_start_locations,
++            num_agents=self.config.num_agents,
++            map_size=map_size,
++        )
++        absolute_task_tape = _normalize_dai_absolute_task_tape(
++            getattr(self.config, "absolute_task_tape", None),
++            num_agents=self.config.num_agents,
++            map_size=map_size,
++            horizon_steps=self.config.warmup_time + self.config.simu_time,
++        )
++        absolute_start_locations = _normalize_dai_start_locations(
++            getattr(self.config, "absolute_task_tape_start_locations", None),
++            num_agents=self.config.num_agents,
++            map_size=map_size,
++        )
++        if (fixed_goal_tape is None) != (fixed_start_locations is None):
++            raise ValueError(
++                "fixed_goal_tape and fixed_goal_tape_start_locations must be set together"
++            )
++        if (absolute_task_tape is None) != (absolute_start_locations is None):
++            raise ValueError(
++                "absolute_task_tape and absolute_task_tape_start_locations "
++                "must be set together"
++            )
++        if fixed_goal_tape is not None and absolute_task_tape is not None:
++            raise ValueError(
++                "fixed_goal_tape and absolute_task_tape are mutually exclusive"
++            )
++        if fixed_goal_tape is not None:
++            if not self.config.gen_tasks:
++                raise ValueError(
++                    "fixed_goal_tape requires gen_tasks=True and an explicit Kiva map"
++                )
++            if self.config.task_dist_change_interval > 0:
++                raise ValueError(
++                    "fixed_goal_tape is already the exogenous workload; "
++                    "encode changes in the tape and set "
++                    "task_dist_change_interval=-1"
++                )
++            if self.config.initial_task_distribution_phase != 0:
++                raise ValueError(
++                    "initial_task_distribution_phase must be 0 with a fixed goal tape"
++                )
++            self._dai_expected_goal_tape = fixed_goal_tape
++            self._dai_expected_goal_tape_start_locations = fixed_start_locations
++            self._dai_expected_goal_tape_sha256 = (
++                _dai_fixed_goal_tape_sha256(
++                    fixed_start_locations, fixed_goal_tape
++                )
++            )
++            self._dai_expected_goal_tape_fnv1a64 = (
++                _dai_fixed_goal_tape_fnv1a64(
++                    fixed_start_locations, fixed_goal_tape
++                )
++            )
++        else:
++            self._dai_expected_goal_tape = None
++            self._dai_expected_goal_tape_start_locations = None
++            self._dai_expected_goal_tape_sha256 = ""
++            self._dai_expected_goal_tape_fnv1a64 = ""
++
++        if absolute_task_tape is not None:
++            if not self.config.gen_tasks:
++                raise ValueError(
++                    "absolute_task_tape requires gen_tasks=True and an explicit "
++                    "Kiva map"
++                )
++            if self.config.task_dist_change_interval > 0:
++                raise ValueError(
++                    "absolute_task_tape is the complete exogenous workload; "
++                    "task_dist_change_interval must be non-positive"
++                )
++            if self.config.initial_task_distribution_phase != 0:
++                raise ValueError(
++                    "initial_task_distribution_phase must be 0 with an "
++                    "absolute task tape"
++                )
++            self._dai_expected_absolute_task_tape = absolute_task_tape
++            self._dai_expected_absolute_task_tape_start_locations = (
++                absolute_start_locations
++            )
++            self._dai_expected_absolute_task_tape_sha256 = (
++                _dai_absolute_task_tape_sha256(
++                    absolute_start_locations, absolute_task_tape
++                )
++            )
++            self._dai_expected_absolute_task_tape_fnv1a64 = (
++                _dai_absolute_task_tape_fnv1a64(
++                    absolute_start_locations, absolute_task_tape
++                )
++            )
++        else:
++            self._dai_expected_absolute_task_tape = None
++            self._dai_expected_absolute_task_tape_start_locations = None
++            self._dai_expected_absolute_task_tape_sha256 = ""
++            self._dai_expected_absolute_task_tape_fnv1a64 = ""
++
+         kwargs = {
+-            "seed": int(self.rng.integers(100000)),
++            "seed": int(self._effective_episode_seed),
+             "simu_time": self.config.simu_time, 
+             "map_path": self.config.map_path, 
+             "gen_tasks": self.config.gen_tasks,  
+@@ -221,13 +1622,31 @@ class TrafficFlowOnlineEnv:
+             "num_tasks": self.config.num_tasks, 
+             "hidden_size": self.config.hidden_size, 
+             "task_assignment_strategy": self.config.task_assignment_strategy, 
++            "num_tasks_reveal": self.config.num_tasks_reveal,
+             "task_dist_change_interval": self.config.task_dist_change_interval, 
+             "task_random_type": self.config.task_random_type, 
+             "dist_sigma": self.config.dist_sigma, 
+             "dist_K": self.config.dist_K, 
++            "initial_task_distribution_phase": (
++                self.config.initial_task_distribution_phase
++            ),
+             "warmup_time": self.config.warmup_time, 
+             "update_gg_interval": self.config.update_gg_interval
+         }
++        if fixed_goal_tape is not None:
++            kwargs["fixed_goal_tape"] = fixed_goal_tape
++            kwargs["fixed_goal_tape_start_locations"] = fixed_start_locations
++            kwargs["fixed_goal_tape_manifest_sha256"] = (
++                self._dai_expected_goal_tape_sha256
++            )
++        if absolute_task_tape is not None:
++            kwargs["absolute_task_tape"] = absolute_task_tape
++            kwargs["absolute_task_tape_start_locations"] = (
++                absolute_start_locations
++            )
++            kwargs["absolute_task_tape_manifest_sha256"] = (
++                self._dai_expected_absolute_task_tape_sha256
++            )
+         if not self.config.gen_tasks:
+             assert self.config.all_json_path is not None
+             kwargs["gen_tasks"] = False
+@@ -247,6 +1666,9 @@ class TrafficFlowOnlineEnv:
+             map_weights = self.curr_weights.flatten().tolist()
+         else:
+             map_weights = min_max_normalize(self.curr_weights, self.lb, self.ub).flatten().tolist()
++        self._dai_last_applied_guidance_sha256 = self._hash_dai_guidance(
++            map_weights
++        )
+         result_str = self.simulator.update_gg_and_step(map_weights)
+         result = json.loads(result_str)
+ 
+@@ -265,6 +1687,24 @@ class TrafficFlowOnlineEnv:
+         self.curr_weights = np.moveaxis(_action, 0, 2)
+ 
+         result = self._run_sim()
++
++        if self._dai_pending_guidance_metadata is None:
++            guidance_version = self.i
++            guidance_sha256 = self._dai_last_applied_guidance_sha256
++            guidance_metadata_source = "applied_weights"
++        else:
++            guidance_version, guidance_sha256 = (
++                self._dai_pending_guidance_metadata
++            )
++            guidance_metadata_source = "external"
++        dai_trace = self._build_dai_trace(
++            result,
++            expect_warmup=False,
++            guidance_version=guidance_version,
++            guidance_sha256=guidance_sha256,
++            guidance_metadata_source=guidance_metadata_source,
++        )
++        self._dai_pending_guidance_metadata = None
+         
+         assert self.starts is not None
+         self.update_paths(result["actual_paths"])
+@@ -283,16 +1723,44 @@ class TrafficFlowOnlineEnv:
+         sub_result = {"throughput": result["throughput"]}
+         info = {
+             "result": sub_result,
+-            "weights": self.curr_weights
++            "weights": self.curr_weights,
++            "dai_trace": dai_trace,
+         }
+ 
+         return self._gen_obs(result), reward, terminated, truncated, info
+ 
+     
+     def reset(self, seed=None, options=None):
++        if seed is not None:
++            self.seed = self._normalize_episode_seed(seed)
++            self.rng = np.random.default_rng(seed=self.seed)
++            self._effective_episode_seed = self.seed
++        else:
++            self._effective_episode_seed = int(
++                self.rng.integers(0, 1 << 32, dtype=np.uint64)
++            )
++
+         self.i = 0
+         self.num_task_finished = 0
+         self.left_timesteps = self.config.simu_time
++        self._dai_last_trace_end = None
++        self._dai_last_event_id = -1
++        self._dai_last_event_timestep = -1
++        self._dai_last_route_build_id = -1
++        self._dai_route_exposed_task_ids = set()
++        self._dai_last_distribution_update_timestep = -1
++        self._dai_last_map_weights_revision = None
++        self._dai_validated_applied_guidance_sha256 = None
++        self._dai_map_revision_metadata = {}
++        self._dai_last_num_task_finished = 0
++        self._dai_pending_guidance_metadata = None
++        self._dai_last_applied_guidance_sha256 = None
++        self._dai_last_tape_assigned_prefix = None
++        self._dai_last_tape_completed_prefix = None
++        self._dai_last_tape_released_prefix = None
++        self._dai_absolute_assignment_timestamps = {}
++        self._dai_absolute_scored_completion_baseline = None
++        self._dai_current_absolute_completed_prefix = None
+         
+         self.starts = None
+         
+@@ -309,18 +1777,32 @@ class TrafficFlowOnlineEnv:
+             self.curr_weights = np.array(weights)
+             
+         kwargs = self.gen_sim_kwargs()
+-        kwargs["map_weights"] = json.dumps(self.curr_weights.flatten().tolist())
++        initial_map_weights = self.curr_weights.flatten().tolist()
++        kwargs["map_weights"] = json.dumps(initial_map_weights)
++        self._dai_last_applied_guidance_sha256 = self._hash_dai_guidance(
++            initial_map_weights
++        )
+         
+         # initialize cpp simulator
+         self.simulator = period_on_sim(**kwargs)
+         result_str = self.simulator.warmup()
+         result = json.loads(result_str)
++        dai_trace = self._build_dai_trace(
++            result,
++            expect_warmup=True,
++            guidance_version=0,
++            guidance_sha256=self._dai_last_applied_guidance_sha256,
++            guidance_metadata_source="applied_weights",
++        )
+         
+         self.starts = result["start"] # agent start locations
+         self.update_paths(result["actual_paths"])
+ 
+         obs = self._gen_obs(result, is_init=True)
+-        info = {"result": {}}
++        info = {
++            "result": {},
++            "dai_trace": dai_trace,
++        }
+         return obs, info
+     
+ if __name__ == "__main__":
+@@ -375,4 +1857,3 @@ if __name__ == "__main__":
+         done = terminated or truncated
+     
+     print(info["result"]["throughput"])
+-            
+\ No newline at end of file
+diff --git a/CMAES/env_search/manager.py b/CMAES/env_search/manager.py
+index aab68b1..4041177 100644
+--- a/CMAES/env_search/manager.py
++++ b/CMAES/env_search/manager.py
+@@ -17,8 +17,6 @@ from env_search.emitters import EvolutionStrategyEmitter, MapElitesBaselineWareh
+ from env_search.schedulers import Scheduler
+ from env_search.utils.logging import worker_log
+ from env_search.utils.metric_logger import MetricLogger
+-from env_search.warehouse.warehouse_manager import WarehouseManager
+-from env_search.competition.competition_manager import CompetitionManager
+ from env_search.traffic_mapf.traffic_mapf_manager import TrafficMAPFManager
+ # from env_search.learn2follow.learn2follow_manager import Learn2FollowManager
+ import wandb
+@@ -27,8 +25,6 @@ import wandb
+ # each line above messes with formatting).
+ IMPORTS_FOR_GIN = (
+     GridArchive,
+-    # WarehouseManager,
+-    CompetitionManager,
+     TrafficMAPFManager, 
+     # Learn2FollowManager
+ )
+diff --git a/CMAES/env_search/traffic_mapf/config.py b/CMAES/env_search/traffic_mapf/config.py
+index 2afb94b..8cc145a 100644
+--- a/CMAES/env_search/traffic_mapf/config.py
++++ b/CMAES/env_search/traffic_mapf/config.py
+@@ -34,6 +34,7 @@ class TrafficMAPFConfig:
+     num_tasks: int = 100000
+     seed: int = 0
+     task_assignment_strategy: str = "roundrobin"
++    num_tasks_reveal: int = 1
+     
+     # offline sim cfg
+     iter_update_n_iters: int = 1
+@@ -54,4 +55,22 @@ class TrafficMAPFConfig:
+     task_random_type: str = "Gaussian"
+     dist_sigma: float = 0.5
+     dist_K: int = 3
+-        
+\ No newline at end of file
++    # Gate-P0 opt-in. Each inner list is the complete saturated-backlog goal
++    # sequence for one agent, encoded as flattened map locations. When set,
++    # the C++ Kiva system performs no online goal RNG draws.
++    fixed_goal_tape: Optional[List[List[int]]] = None
++    # Flattened starts returned alongside fixed_goal_tape by the pybind tape
++    # generator. C++ rejects the manifest if these differ from its own
++    # independently seeded starts.
++    fixed_goal_tape_start_locations: Optional[List[int]] = None
++    # Claim-bearing workload control. Each entry is [flattened_goal_location,
++    # absolute_release_timestep]. The full per-agent FIFO tape is copied into
++    # C++ before t=0; released tasks wait in an exogenous backlog independently
++    # of task completion speed. Mutually exclusive with fixed_goal_tape.
++    absolute_task_tape: Optional[List[List[List[int]]]] = None
++    # Independently regenerated C++ starts must match this manifest field.
++    absolute_task_tape_start_locations: Optional[List[int]] = None
++    # Diagnostic-only: 0 is uniform; k>0 advances the independent task-
++    # distribution RNG k times before warmup and then freezes the resulting
++    # phase when task_dist_change_interval is negative.
++    initial_task_distribution_phase: int = 0
+diff --git a/CMAES/env_search/utils/worker_state.py b/CMAES/env_search/utils/worker_state.py
+index 8eb149e..291a4f0 100644
+--- a/CMAES/env_search/utils/worker_state.py
++++ b/CMAES/env_search/utils/worker_state.py
+@@ -8,9 +8,7 @@ from functools import partial
+ from dask.distributed import get_worker
+ 
+ from env_search.warehouse.config import WarehouseConfig
+-from env_search.warehouse.module import WarehouseModule
+ from env_search.competition.config import CompetitionConfig
+-from env_search.competition.module import CompetitionModule
+ from env_search.traffic_mapf.config import TrafficMAPFConfig
+ from env_search.traffic_mapf.module import TrafficMAPFModule
+ # from env_search.learn2follow.config import Learn2FollowConfig
+@@ -42,10 +40,14 @@ WAREHOUSE_MOD_ATTR = "warehouse_module"
+ 
+ def init_warehouse_module(config: WarehouseConfig):
+     """Initializes this worker's warehouse module."""
++    # Import the domain-specific compiled extension only when this domain is
++    # actually selected. TrafficMAPF training does not build RHCR.
++    from env_search.warehouse.module import WarehouseModule
++
+     set_worker_state(WAREHOUSE_MOD_ATTR, WarehouseModule(config))
+ 
+ 
+-def get_warehouse_module() -> WarehouseModule:
++def get_warehouse_module():
+     """Retrieves this worker's warehouse module."""
+     return get_worker_state(WAREHOUSE_MOD_ATTR)
+ 
+@@ -59,10 +61,14 @@ COMPETITION_MOD_ATTR = "competition_module"
+ 
+ def init_competition_module(config: CompetitionConfig):
+     """Initializes this worker's competition module."""
++    # Competition uses a different compiled simulator; keep it out of the
++    # TrafficMAPF-only import path.
++    from env_search.competition.module import CompetitionModule
++
+     set_worker_state(COMPETITION_MOD_ATTR, CompetitionModule(config))
+ 
+ 
+-def get_competition_module() -> CompetitionModule:
++def get_competition_module():
+     """Retrieves this worker's competition module."""
+     return get_worker_state(COMPETITION_MOD_ATTR)
+ 
+@@ -90,4 +96,4 @@ def get_traffic_mapf_module() -> TrafficMAPFModule:
+ #     set_worker_state(LEARN2FOLLOW_MOD_ATTR, Learn2FollowModule(config))
+ 
+ # def get_learn2follow_module() -> Learn2FollowModule:
+-#     return get_worker_state(LEARN2FOLLOW_MOD_ATTR)
+\ No newline at end of file
++#     return get_worker_state(LEARN2FOLLOW_MOD_ATTR)
+diff --git a/Guided-PIBT/guided-pibt/benchmark-lifelong/maps/warehouse_60x100_kiva.map b/Guided-PIBT/guided-pibt/benchmark-lifelong/maps/warehouse_60x100_kiva.map
+index 1485bd4..03b6b94 100644
+--- a/Guided-PIBT/guided-pibt/benchmark-lifelong/maps/warehouse_60x100_kiva.map
++++ b/Guided-PIBT/guided-pibt/benchmark-lifelong/maps/warehouse_60x100_kiva.map
+@@ -1,5 +1,5 @@
+-typW octilW
+-hWight 60
++type octile
++height 60
+ width 100
+ map
+ @@@@...@@@....@@@....@@@....@@@....@@@....@@@....@@@....@@@....@@@....@@@....@@@....@@@....@@@..@@@@
+diff --git a/Guided-PIBT/guided-pibt/inc/CompetitionSystem.h b/Guided-PIBT/guided-pibt/inc/CompetitionSystem.h
+index fd1a7d9..21a29c4 100644
+--- a/Guided-PIBT/guided-pibt/inc/CompetitionSystem.h
++++ b/Guided-PIBT/guided-pibt/inc/CompetitionSystem.h
+@@ -7,10 +7,45 @@
+ #include "MAPFPlanner.h"
+ #include "Logger.h"
+ #include <pthread.h>
++#include <cstdint>
+ #include <future>
+ #include <random>
++#include <stdexcept>
++#include <utility>
+ #include "TaskDistGenerator.h"
+ 
++// Versioned, stateless stream derivation.  Keeping each source of environment
++// randomness on a separate stream prevents a policy-dependent number of task
++// completions from changing future distribution updates.
++inline std::uint32_t dai_derive_seed(
++    std::uint64_t root_seed, std::uint64_t stream_id
++){
++    std::uint64_t value = root_seed
++        + 0x9E3779B97F4A7C15ULL * (stream_id + 1ULL);
++    value = (value ^ (value >> 30U)) * 0xBF58476D1CE4E5B9ULL;
++    value = (value ^ (value >> 27U)) * 0x94D049BB133111EBULL;
++    value ^= value >> 31U;
++    return static_cast<std::uint32_t>(value ^ (value >> 32U));
++}
++
++std::string dai_fixed_goal_tape_fnv1a64(
++    const std::vector<int>& start_locations,
++    const std::vector<std::vector<int>>& goal_tape
++);
++
++std::string dai_absolute_task_tape_fnv1a64(
++    const std::vector<int>& start_locations,
++    const std::vector<std::vector<std::vector<int>>>& task_tape
++);
++
++struct DAIAbsoluteTask {
++    Task task;
++    int release_timestep;
++
++    DAIAbsoluteTask(Task task, int release_timestep):
++        task(std::move(task)), release_timestep(release_timestep) {}
++};
++
+ class BaseSystem{
+ public:
+ 
+@@ -48,7 +83,21 @@ public:
+ 
+     void set_num_tasks_reveal(int num){num_tasks_reveal = num;};
+     void set_plan_time_limit(int limit){plan_time_limit = limit;};
+-    void set_preprocess_time_limit(int limit){preprocess_time_limit = limit;};
++	void set_preprocess_time_limit(int limit){preprocess_time_limit = limit;};
++
++    void set_seed_bundle(
++        std::uint32_t episode,
++        std::uint32_t planner_priority,
++        std::uint32_t start,
++        std::uint32_t task,
++        std::uint32_t distribution
++    ){
++        episode_seed = episode;
++        planner_priority_seed = planner_priority;
++        start_seed = start;
++        task_seed = task;
++        distribution_seed = distribution;
++    };
+ 
+     vector<Action> plan();
+     vector<Action> plan_wrapper();
+@@ -71,11 +120,40 @@ public:
+         this->random_type = _random_type;
+     }
+ 
++    // Diagnostic-only phase freezing.  Phase 0 keeps the constructor's
++    // uniform Kiva distribution; phase k>0 advances the independent
++    // distribution RNG exactly k times and retains only the final state in
++    // the trace.  Setting task_dist_change_interval=-1 then freezes that
++    // state for the complete episode.
++    void initialize_task_distribution_phase(int phase_index){
++        if (phase_index < 0){
++            throw std::invalid_argument(
++                "initial task-distribution phase must be non-negative"
++            );
++        }
++        if (phase_index == 0){
++            return;
++        }
++        timestep = 0;
++        for (int phase = 0; phase < phase_index; ++phase){
++            random_update_tasks_distribution();
++        }
++        auto final_distribution = distribution_update_trace.back();
++        distribution_update_trace.clear();
++        distribution_update_trace.push_back(final_distribution);
++    }
++
+     
+     int warmup_time;
+     int update_gg_interval;
+     int simulation_time;
+ 
++    std::uint32_t episode_seed = 0;
++    std::uint32_t planner_priority_seed = 0;
++    std::uint32_t start_seed = 0;
++    std::uint32_t task_seed = 0;
++    std::uint32_t distribution_seed = 0;
++
+ protected:
+ 
+     Grid map;
+@@ -98,6 +176,10 @@ protected:
+ 
+     bool has_timeout = false;
+ 
++    // Exact exogenous distribution states published during the episode.
++    // These are returned per trace window for replay auditing.
++    std::vector<nlohmann::ordered_json> distribution_update_trace;
++
+     std::vector<Path> paths;
+     std::vector<std::list<Task > > finished_tasks; // location + finish time
+ 
+@@ -112,17 +194,82 @@ protected:
+     // tasks that haven't been finished but have been revealed to agents;
+     vector< deque<Task > > assigned_tasks;
+ 
+-    vector<list<std::tuple<int,int,std::string>>> events;
++    // Research trace only.  The tuple fields are:
++    // event_id, task_id, timestep, event_type, goal_location.
++    // event_id is monotonic across all agents so Python can detect duplicate or
++    // missing window records without depending on vector iteration order.
++    vector<list<std::tuple<long long,int,int,std::string,int>>> events;
+     list<Task> all_tasks;
+ 
+     //for evaluation
+     vector<int> solution_costs;
+     int num_of_task_finish = 0;
+     list<double> planner_times; 
++    // One record per executed simulator step: timestep, seconds, timed_out.
++    // Timeout records use the configured plan_time_limit as their seconds value;
++    // non-timeout records use steady-clock elapsed time.
++    list<std::tuple<int,double,bool>> planner_time_trace;
++    long long next_trace_event_id = 0;
++    // event_id, agent_id, task_id, goal_location, execution_timestep,
++    // map_weights_revision, reason.
++    list<std::tuple<long long,int,int,int,int,long long,std::string>> route_build_trace;
++    long long next_route_build_event_id = 0;
++    long long map_weights_revision = 0;
++    vector<bool> pending_route_traj_was_empty;
++    vector<int> pending_route_task_ids;
++    vector<int> pending_route_goal_locs;
++    vector<int> pending_route_planner_goal_locs;
++    // Last task identity for which each agent emitted at least one route
++    // exposure.  MAPFPlanner::task_change compares goal locations, so it is
++    // not sufficient to prove that every simulator task identity was exposed
++    // (for example when a non-empty trajectory is reused).  This sentinel is
++    // trace-only state and never feeds back into planning.
++    vector<int> last_route_exposed_task_ids;
++    // Effective map-weight revision under which each agent's currently
++    // reusable trajectory was most recently built.  This also tracks private
++    // holding-goal routes, because a later real task can legitimately inherit
++    // one when its goal matches the idle planner target.
++    vector<long long> last_route_plan_map_weights_revisions;
++    long long pending_route_map_weights_revision = 0;
++    bool pending_route_snapshot_valid = false;
++    int trace_window_start_timestep = 0;
++    int trace_window_end_timestep = 0;
++    bool trace_window_is_warmup = false;
+     bool fast_mover_feasible = true;
+ 
++    // Optional Gate-P0 task-treatment control.  In fixed-tape mode every
++    // agent consumes a pre-generated, per-agent goal sequence.  The sequence
++    // is copied into C++ before the first simulator step, so policy-dependent
++    // completion rates cannot change later RNG draws.  Prefix counters refer
++    // to tasks revealed/assigned from the tape; completed prefixes are
++    // derived from finished_tasks in analyzeCurrResults().
++    bool fixed_goal_tape_enabled = false;
++    bool fixed_goal_tape_exhausted = false;
++    std::string fixed_goal_tape_manifest_sha256;
++    std::string fixed_goal_tape_content_fnv1a64;
++    std::vector<int> fixed_goal_tape_start_locations;
++    std::vector<std::uint64_t> fixed_goal_tape_lengths;
++    std::vector<std::uint64_t> fixed_goal_tape_assigned_prefix;
++    std::uint64_t fixed_goal_tape_total_tasks = 0;
++
++    // Claim-bearing task treatment: complete per-agent task contents and
++    // absolute release times are copied in before t=0. Released tasks wait in
++    // FIFO backlogs; assignment/completion may be policy dependent, release is
++    // not. Idle agents receive only an internal holding goal at their current
++    // location and no synthetic task or completion.
++    bool absolute_task_tape_enabled = false;
++    std::string absolute_task_tape_manifest_sha256;
++    std::string absolute_task_tape_content_fnv1a64;
++    std::vector<int> absolute_task_tape_start_locations;
++    std::vector<std::uint64_t> absolute_task_tape_lengths;
++    std::vector<std::uint64_t> absolute_task_tape_released_prefix;
++    std::vector<std::uint64_t> absolute_task_tape_assigned_prefix;
++    std::uint64_t absolute_task_tape_total_tasks = 0;
++
+ 
+ 	void initialize();
++    void capture_route_build_snapshot();
++    void record_route_builds_after_plan(const vector<Action>& actions);
+     bool planner_initialize();
+ 	virtual void update_tasks() = 0;
+ 
+@@ -259,13 +406,34 @@ private:
+ class KivaSystem: public BaseSystem 
+ {
+ public:
+-    KivaSystem(Grid &grid, MAPFPlanner* planner, ActionModelWithRotate* model, int num_agents, uint seed):
+-        BaseSystem(grid, planner, model), MT(seed), task_id(0)
++    KivaSystem(
++        Grid &grid,
++        MAPFPlanner* planner,
++        ActionModelWithRotate* model,
++        int num_agents,
++        std::uint32_t start_seed,
++        std::uint32_t task_seed,
++        std::uint32_t distribution_seed
++    ):
++        BaseSystem(grid, planner, model),
++        start_rng(start_seed),
++        distribution_rng(distribution_seed),
++        task_id(0)
+     {
+         num_of_agents = num_agents;
+         starts.resize(num_of_agents);
+ 
+-        std::shuffle(grid.empty_locs.begin(),grid.empty_locs.end(), MT);
++        task_rng_by_agent.reserve(num_of_agents);
++        for (int agent_id = 0; agent_id < num_of_agents; ++agent_id)
++        {
++            task_rng_by_agent.emplace_back(
++                dai_derive_seed(task_seed, static_cast<std::uint64_t>(agent_id))
++            );
++        }
++
++        std::shuffle(
++            grid.empty_locs.begin(), grid.empty_locs.end(), start_rng
++        );
+ 
+         for (size_t i = 0; i < num_of_agents; i++)
+         {
+@@ -301,10 +469,22 @@ public:
+     ~KivaSystem(){};
+ 
+     void random_update_tasks_distribution() override;
++    void configure_fixed_goal_tape(
++        const std::vector<int>& expected_start_locations,
++        const std::vector<std::vector<int>>& goal_tape,
++        const std::string& manifest_sha256
++    );
++    void configure_absolute_task_tape(
++        const std::vector<int>& expected_start_locations,
++        const std::vector<std::vector<std::vector<int>>>& task_tape,
++        const std::string& manifest_sha256
++    );
+     // std::vector<double> get_tasks_distribution() override;
+ 
+ private:
+-    std::mt19937 MT;
++    std::mt19937 start_rng;
++    std::vector<std::mt19937> task_rng_by_agent;
++    std::mt19937 distribution_rng;
+     int task_id=0;
+ 
+     void update_tasks();
+@@ -315,18 +495,37 @@ private:
+     std::vector<double> end_pts_weights;
+ 
+     std::vector<int> prev_task_locs;
++    std::vector<std::deque<Task>> fixed_goal_task_queues;
++    std::vector<std::deque<DAIAbsoluteTask>> absolute_task_unreleased_queues;
++    std::vector<std::deque<Task>> absolute_task_released_backlogs;
+ 
+ };
+ 
+ 
+ class OnlineGenerateTaskSystem: public BaseSystem{
+     public:
+-    OnlineGenerateTaskSystem(Grid &grid, MAPFPlanner* planner, std::vector<int>& start_locs, ActionModelWithRotate* model, uint seed):
+-        BaseSystem(grid, planner, model), MT(seed)
++    OnlineGenerateTaskSystem(
++        Grid &grid,
++        MAPFPlanner* planner,
++        std::vector<int>& start_locs,
++        ActionModelWithRotate* model,
++        std::uint32_t task_seed,
++        std::uint32_t distribution_seed
++    ):
++        BaseSystem(grid, planner, model),
++        distribution_rng(distribution_seed)
+     {
+         this->num_of_agents = start_locs.size();
+         this->starts.resize(this->num_of_agents);
+ 
++        task_rng_by_agent.reserve(this->num_of_agents);
++        for (int agent_id = 0; agent_id < this->num_of_agents; ++agent_id)
++        {
++            task_rng_by_agent.emplace_back(
++                dai_derive_seed(task_seed, static_cast<std::uint64_t>(agent_id))
++            );
++        }
++
+         for (size_t i = 0; i < start_locs.size(); i++){
+             if (grid.map[start_locs[i]] == 1)
+             {
+@@ -347,10 +546,10 @@ class OnlineGenerateTaskSystem: public BaseSystem{
+     void random_update_tasks_distribution() override;
+ 
+     private:
+-    std::mt19937 MT;
++    std::vector<std::mt19937> task_rng_by_agent;
++    std::mt19937 distribution_rng;
+     std::vector<double> empty_weights;
+     std::discrete_distribution<int> goal_loc_dist;
+     int task_id = 0;
+     void update_tasks();
+ };
+-
+diff --git a/Guided-PIBT/guided-pibt/inc/MAPFPlanner.h b/Guided-PIBT/guided-pibt/inc/MAPFPlanner.h
+index cd1110e..c923466 100644
+--- a/Guided-PIBT/guided-pibt/inc/MAPFPlanner.h
++++ b/Guided-PIBT/guided-pibt/inc/MAPFPlanner.h
+@@ -1,4 +1,5 @@
+ #pragma once
++#include <cstdint>
+ #include <ctime>
+ #include "SharedEnv.h"
+ #include "ActionModel.h"
+@@ -67,4 +68,8 @@ public:
+ 
+     void set_network_params(const std::vector<double> network_params);
+     void set_network_type(std::string net_type);
++    void set_seed(std::uint32_t seed) { random_seed = seed; }
++
++private:
++    std::uint32_t random_seed = 0;
+ };
+diff --git a/Guided-PIBT/guided-pibt/inc/period_on_sim.h b/Guided-PIBT/guided-pibt/inc/period_on_sim.h
+index ce2817c..8b179fa 100644
+--- a/Guided-PIBT/guided-pibt/inc/period_on_sim.h
++++ b/Guided-PIBT/guided-pibt/inc/period_on_sim.h
+@@ -8,6 +8,7 @@
+ #include "dev.h"
+ #include <signal.h>
+ #include <climits>
++#include <cstdint>
+ #include <memory>
+ #include <random>
+ 
+@@ -15,6 +16,13 @@ namespace po = boost::program_options;
+ using json = nlohmann::json;
+ namespace py = pybind11;
+ 
++py::dict generate_kiva_saturated_goal_tape(
++    const std::string& map_path,
++    int num_agents,
++    int goals_per_agent,
++    std::uint32_t episode_seed
++);
++
+ class period_on_sim {
+     public:
+         period_on_sim(py::kwargs kwargs);
+@@ -31,4 +39,4 @@ class period_on_sim {
+         int warmup_time;
+         int update_gg_interval;
+ 
+-};
+\ No newline at end of file
++};
+diff --git a/Guided-PIBT/guided-pibt/src/CompetitionSystem.cpp b/Guided-PIBT/guided-pibt/src/CompetitionSystem.cpp
+index 3b641f9..4a52850 100644
+--- a/Guided-PIBT/guided-pibt/src/CompetitionSystem.cpp
++++ b/Guided-PIBT/guided-pibt/src/CompetitionSystem.cpp
+@@ -1,4 +1,13 @@
++#include <algorithm>
+ #include <cmath>
++#include <cstdint>
++#include <iomanip>
++#include <iterator>
++#include <limits>
++#include <sstream>
++#include <tuple>
++#include <utility>
++#include <vector>
+ #include "CompetitionSystem.h"
+ #include <boost/tokenizer.hpp>
+ #include "nlohmann/json.hpp"
+@@ -12,6 +21,159 @@
+ 
+ using json = nlohmann::ordered_json;
+ 
++namespace {
++
++constexpr std::uint64_t DAI_FNV1A64_OFFSET = 14695981039346656037ULL;
++constexpr std::uint64_t DAI_FNV1A64_PRIME = 1099511628211ULL;
++
++void dai_fnv1a64_add_byte(std::uint64_t& digest, std::uint8_t value){
++    digest ^= static_cast<std::uint64_t>(value);
++    digest *= DAI_FNV1A64_PRIME;
++}
++
++void dai_fnv1a64_add_uint64(std::uint64_t& digest, std::uint64_t value){
++    // The canonical tape encoding is explicitly little-endian and therefore
++    // independent of the host architecture.
++    for (int byte_index = 0; byte_index < 8; ++byte_index){
++        dai_fnv1a64_add_byte(
++            digest,
++            static_cast<std::uint8_t>((value >> (8 * byte_index)) & 0xffU)
++        );
++    }
++}
++
++std::string dai_fixed_goal_tape_fnv1a64_impl(
++    const std::vector<int>& start_locations,
++    const std::vector<std::vector<int>>& goal_tape
++){
++    std::uint64_t digest = DAI_FNV1A64_OFFSET;
++    const std::string schema = "dai.saturated-goal-tape/v1";
++    for (const unsigned char character: schema){
++        dai_fnv1a64_add_byte(digest, character);
++    }
++    dai_fnv1a64_add_uint64(
++        digest, static_cast<std::uint64_t>(goal_tape.size())
++    );
++    for (std::size_t agent_id = 0; agent_id < goal_tape.size(); ++agent_id){
++        dai_fnv1a64_add_uint64(
++            digest, static_cast<std::uint64_t>(agent_id)
++        );
++        dai_fnv1a64_add_uint64(
++            digest,
++            static_cast<std::uint64_t>(
++                static_cast<std::int64_t>(start_locations[agent_id])
++            )
++        );
++        dai_fnv1a64_add_uint64(
++            digest, static_cast<std::uint64_t>(goal_tape[agent_id].size())
++        );
++        for (const int goal_location: goal_tape[agent_id]){
++            dai_fnv1a64_add_uint64(
++                digest,
++                static_cast<std::uint64_t>(
++                    static_cast<std::int64_t>(goal_location)
++                )
++            );
++        }
++    }
++    std::ostringstream encoded;
++    encoded << std::hex << std::setfill('0') << std::setw(16) << digest;
++    return encoded.str();
++}
++
++std::string dai_absolute_task_tape_fnv1a64_impl(
++    const std::vector<int>& start_locations,
++    const std::vector<std::vector<std::vector<int>>>& task_tape
++){
++    std::uint64_t digest = DAI_FNV1A64_OFFSET;
++    const std::string schema = "dai.kiva-absolute-release-tape/v1";
++    for (const unsigned char character: schema){
++        dai_fnv1a64_add_byte(digest, character);
++    }
++    dai_fnv1a64_add_uint64(
++        digest, static_cast<std::uint64_t>(task_tape.size())
++    );
++    for (std::size_t agent_id = 0; agent_id < task_tape.size(); ++agent_id){
++        dai_fnv1a64_add_uint64(digest, agent_id);
++        dai_fnv1a64_add_uint64(
++            digest,
++            static_cast<std::uint64_t>(
++                static_cast<std::int64_t>(start_locations[agent_id])
++            )
++        );
++        dai_fnv1a64_add_uint64(digest, task_tape[agent_id].size());
++        for (const auto& entry: task_tape[agent_id]){
++            if (entry.size() != 2){
++                throw std::invalid_argument(
++                    "absolute task entries must be [goal, release_timestep]"
++                );
++            }
++            dai_fnv1a64_add_uint64(
++                digest,
++                static_cast<std::uint64_t>(
++                    static_cast<std::int64_t>(entry[0])
++                )
++            );
++            dai_fnv1a64_add_uint64(
++                digest,
++                static_cast<std::uint64_t>(
++                    static_cast<std::int64_t>(entry[1])
++                )
++            );
++        }
++    }
++    std::ostringstream encoded;
++    encoded << std::hex << std::setfill('0') << std::setw(16) << digest;
++    return encoded.str();
++}
++
++bool dai_is_lower_sha256(const std::string& digest){
++    if (digest.size() != 64){
++        return false;
++    }
++    return std::all_of(
++        digest.begin(), digest.end(),
++        [](const char character){
++            return (character >= '0' && character <= '9')
++                || (character >= 'a' && character <= 'f');
++        }
++    );
++}
++
++bool dai_contains_location(
++    const std::vector<int>& locations, const int goal_location
++){
++    return std::find(
++        locations.begin(), locations.end(), goal_location
++    ) != locations.end();
++}
++
++}  // namespace
++
++std::string dai_fixed_goal_tape_fnv1a64(
++    const std::vector<int>& start_locations,
++    const std::vector<std::vector<int>>& goal_tape
++){
++    if (start_locations.size() != goal_tape.size()){
++        throw std::invalid_argument(
++            "goal-tape fingerprint requires one start location per agent"
++        );
++    }
++    return dai_fixed_goal_tape_fnv1a64_impl(start_locations, goal_tape);
++}
++
++std::string dai_absolute_task_tape_fnv1a64(
++    const std::vector<int>& start_locations,
++    const std::vector<std::vector<std::vector<int>>>& task_tape
++){
++    if (start_locations.size() != task_tape.size()){
++        throw std::invalid_argument(
++            "absolute task-tape fingerprint requires one start per agent"
++        );
++    }
++    return dai_absolute_task_tape_fnv1a64_impl(start_locations, task_tape);
++}
++
+ list<Task> BaseSystem::move(vector<Action>& actions){
+     // actions.resize(num_of_agents, Action::NA);
+     for (int k = 0; k < num_of_agents; k++) {
+@@ -38,7 +200,10 @@ list<Task> BaseSystem::move(vector<Action>& actions){
+             assigned_tasks[k].pop_front();
+             task.t_completed = timestep;
+             finished_tasks_this_timestep.push_back(task);
+-            events[k].push_back(make_tuple(task.task_id, timestep,"finished"));
++            events[k].push_back(make_tuple(
++                next_trace_event_id++, task.task_id, timestep, "finished",
++                task.location
++            ));
+             // log_event_finished(k, task.task_id, timestep);
+         }
+         paths[k].push_back(curr_states[k]);
+@@ -102,6 +267,12 @@ void BaseSystem::sync_shared_env(){
+             env->goal_locations[i].push_back({task.location, task.t_assigned });
+             env->goal_loc_arr[task.location] += 1;
+         }
++        if (absolute_task_tape_enabled && env->goal_locations[i].empty()){
++            // The current planner assumes one target per agent. This holding
++            // target is private planner state: it is not counted in
++            // goal_loc_arr, task observations, events, or throughput.
++            env->goal_locations[i].push_back({curr_states[i].location, timestep});
++        }
+     }
+     // env->print_goal_arr();
+     env->curr_timestep = timestep;
+@@ -120,6 +291,75 @@ vector<Action> BaseSystem::plan_wrapper(){
+     return actions;
+ }
+ 
++void BaseSystem::capture_route_build_snapshot(){
++    pending_route_traj_was_empty.assign(num_of_agents, true);
++    pending_route_task_ids.assign(num_of_agents, -1);
++    pending_route_goal_locs.assign(num_of_agents, -1);
++    pending_route_planner_goal_locs.assign(num_of_agents, -1);
++    for (int i = 0; i < num_of_agents; ++i){
++        pending_route_traj_was_empty[i] = planner->trajLNS.trajs[i].empty();
++        pending_route_planner_goal_locs[i] = planner->trajLNS.tasks[i];
++        if (!assigned_tasks[i].empty()){
++            pending_route_task_ids[i] = assigned_tasks[i].front().task_id;
++            pending_route_goal_locs[i] = assigned_tasks[i].front().location;
++        }
++    }
++    pending_route_map_weights_revision = map_weights_revision;
++    pending_route_snapshot_valid = true;
++}
++
++void BaseSystem::record_route_builds_after_plan(const vector<Action>& actions){
++    if (!pending_route_snapshot_valid || actions.size() != num_of_agents){
++        pending_route_snapshot_valid = false;
++        return;
++    }
++    for (int i = 0; i < num_of_agents; ++i){
++        const bool is_nonempty = !planner->trajLNS.trajs[i].empty();
++        const bool initialized = pending_route_traj_was_empty[i] && is_nonempty;
++        const bool changed_task = planner->task_change[i] && is_nonempty;
++        const int task_id = pending_route_task_ids[i];
++        const bool first_task_exposure =
++            is_nonempty && task_id >= 0
++            && last_route_exposed_task_ids[i] != task_id;
++        if (initialized || changed_task){
++            last_route_plan_map_weights_revisions[i] =
++                pending_route_map_weights_revision;
++        }
++        if (task_id < 0){
++            continue;
++        }
++        long long exposure_revision = pending_route_map_weights_revision;
++        std::string reason = initialized ? "init_pp" : "task_change";
++        if (first_task_exposure && !initialized && !changed_task){
++            // An idle agent may already have a trajectory for a private
++            // holding goal that later becomes the next real task goal.  No
++            // new route was built in this plan, so inherit the revision that
++            // actually produced the reusable trajectory rather than falsely
++            // assigning the current revision.
++            if (
++                pending_route_planner_goal_locs[i]
++                    != pending_route_goal_locs[i]
++                || last_route_plan_map_weights_revisions[i] < 0
++            ){
++                throw std::logic_error(
++                    "new task has no auditable route-build provenance"
++                );
++            }
++            exposure_revision = last_route_plan_map_weights_revisions[i];
++            reason = "inherited_goal_route";
++        } else if (!initialized && !changed_task){
++            continue;
++        }
++        route_build_trace.push_back(make_tuple(
++            next_route_build_event_id++, i, task_id,
++            pending_route_goal_locs[i], timestep + 1,
++            exposure_revision, reason
++        ));
++        last_route_exposed_task_ids[i] = task_id;
++    }
++    pending_route_snapshot_valid = false;
++}
++
+ vector<Action> BaseSystem::plan(){
+     using namespace std::placeholders;
+     if (started && future.wait_for(std::chrono::seconds(0)) != std::future_status::ready){
+@@ -131,13 +371,16 @@ vector<Action> BaseSystem::plan(){
+         if (future.wait_for(std::chrono::seconds(plan_time_limit)) == std::future_status::ready){
+             task_td.join();
+             started = false;
+-            return future.get();
++            vector<Action> actions = future.get();
++            record_route_builds_after_plan(actions);
++            return actions;
+         }
+         logger->log_info("planner timeout", timestep);
+         std::cout << "planner timeout: "<< timestep <<std::endl;
+         return {};
+     }
+ 
++    capture_route_build_snapshot();
+     std::packaged_task<std::vector<Action>()> task(std::bind(&BaseSystem::plan_wrapper, this));
+     future = task.get_future();
+     if (task_td.joinable()){
+@@ -148,7 +391,9 @@ vector<Action> BaseSystem::plan(){
+     if (future.wait_for(std::chrono::seconds(plan_time_limit)) == std::future_status::ready){
+         task_td.join();
+         started = false;
+-        return future.get();
++        vector<Action> actions = future.get();
++        record_route_builds_after_plan(actions);
++        return actions;
+     }
+     logger->log_info("planner timeout", timestep);
+     this->has_timeout = true;
+@@ -194,11 +439,17 @@ void BaseSystem::update_map_weights(std::vector<double> map_weights){
+         std::cout << "weights size error! should be "<<this->env->rows * this->env->cols *4<<", but get"<<map_weights.size()<<std::endl;
+         exit(1);
+     }
+-    this->env->map_weights = map_weights;
++    if (this->env->map_weights != map_weights){
++        this->env->map_weights = std::move(map_weights);
++        map_weights_revision++;
++    }
+ }
+ 
+ void BaseSystem::warmup(int warmup_time){
+     initialize();
++    trace_window_start_timestep = timestep;
++    trace_window_end_timestep = timestep;
++    trace_window_is_warmup = true;
+     int num_of_tasks = 0;
+ 
+     for (; timestep < warmup_time; ) { // note: delete timeout
+@@ -215,21 +466,30 @@ void BaseSystem::warmup(int warmup_time){
+         timestep += 1;
+         for (int a = 0; a < num_of_agents; a++)
+             {
+-                if (!env->goal_locations[a].empty())
++                if (!assigned_tasks[a].empty())
+                     solution_costs[a]++;
+             }
+ 
+         // move drives
+         list<Task> new_finished_tasks = move(actions);
+-        if (!planner_movements[0].empty() && planner_movements[0].back() == Action::NA) //add planning time to last record
++        const bool planner_timed_out =
++            !planner_movements[0].empty() &&
++            planner_movements[0].back() == Action::NA;
++        double planner_seconds;
++        if (planner_timed_out) //add planning time to last record
+         {
+             planner_times.back()+=plan_time_limit;
++            planner_seconds = static_cast<double>(plan_time_limit);
+         }
+         else
+         {
+             auto diff = end-start;
+-            planner_times.push_back(std::chrono::duration<double>(diff).count());
++            planner_seconds = std::chrono::duration<double>(diff).count();
++            planner_times.push_back(planner_seconds);
+         }
++        planner_time_trace.push_back(make_tuple(
++            timestep, planner_seconds, planner_timed_out
++        ));
+         ONLYDEV(cout <<"---timestep-task-finished,"<< new_finished_tasks.size() << std::endl;)
+ 
+         // update tasks
+@@ -257,16 +517,20 @@ void BaseSystem::warmup(int warmup_time){
+                         break;
+                     }
+             }
+-        if (complete_all)
++        if (complete_all && !absolute_task_tape_enabled)
+             {
+                 cout << std::endl << "All task finished!" << std::endl;
+                 break;
+             }
+     }
++    trace_window_end_timestep = timestep;
+     cout << "end warmup! timestep ="<<timestep<<", warmup_time" << warmup_time << std::endl;
+ }
+ 
+ void BaseSystem::update_gg_and_step(std::vector<double> new_map_weights){
++    trace_window_start_timestep = timestep;
++    trace_window_end_timestep = timestep;
++    trace_window_is_warmup = false;
+     int curr_total_step = timestep + this->update_gg_interval;
+     int curr_num_of_tasks = 0;
+     this->update_map_weights(new_map_weights);
+@@ -285,21 +549,30 @@ void BaseSystem::update_gg_and_step(std::vector<double> new_map_weights){
+         timestep += 1;
+         for (int a = 0; a < num_of_agents; a++)
+             {
+-                if (!env->goal_locations[a].empty())
++                if (!assigned_tasks[a].empty())
+                     solution_costs[a]++;
+             }
+ 
+         // move drives
+         list<Task> new_finished_tasks = move(actions);
+-        if (!planner_movements[0].empty() && planner_movements[0].back() == Action::NA) //add planning time to last record
++        const bool planner_timed_out =
++            !planner_movements[0].empty() &&
++            planner_movements[0].back() == Action::NA;
++        double planner_seconds;
++        if (planner_timed_out) //add planning time to last record
+         {
+             planner_times.back()+=plan_time_limit;
++            planner_seconds = static_cast<double>(plan_time_limit);
+         }
+         else
+         {
+             auto diff = end-start;
+-            planner_times.push_back(std::chrono::duration<double>(diff).count());
++            planner_seconds = std::chrono::duration<double>(diff).count();
++            planner_times.push_back(planner_seconds);
+         }
++        planner_time_trace.push_back(make_tuple(
++            timestep, planner_seconds, planner_timed_out
++        ));
+         ONLYDEV(cout <<"---timestep-task-finished,"<< new_finished_tasks.size() << std::endl;)
+ 
+         // update tasks
+@@ -327,12 +600,13 @@ void BaseSystem::update_gg_and_step(std::vector<double> new_map_weights){
+                         break;
+                     }
+             }
+-        if (complete_all)
++        if (complete_all && !absolute_task_tape_enabled)
+             {
+                 cout << std::endl << "All task finished!" << std::endl;
+                 break;
+             }
+     }
++    trace_window_end_timestep = timestep;
+     cout << "end update gg and step! timestep ="<<timestep<<", warmup_time" << warmup_time << std::endl;
+ }
+ 
+@@ -340,6 +614,9 @@ void BaseSystem::simulate(int simulation_time){
+     //init logger
+     //Logger* log = new Logger();
+     initialize();
++    trace_window_start_timestep = timestep;
++    trace_window_end_timestep = timestep;
++    trace_window_is_warmup = false;
+     int num_of_tasks = 0;
+ 
+     for (; timestep < simulation_time && ! this->has_timeout; ) {
+@@ -362,21 +639,30 @@ void BaseSystem::simulate(int simulation_time){
+         timestep += 1;
+         for (int a = 0; a < num_of_agents; a++)
+             {
+-                if (!env->goal_locations[a].empty())
++                if (!assigned_tasks[a].empty())
+                     solution_costs[a]++;
+             }
+ 
+         // move drives
+         list<Task> new_finished_tasks = move(actions);
+-        if (!planner_movements[0].empty() && planner_movements[0].back() == Action::NA) //add planning time to last record
++        const bool planner_timed_out =
++            !planner_movements[0].empty() &&
++            planner_movements[0].back() == Action::NA;
++        double planner_seconds;
++        if (planner_timed_out) //add planning time to last record
+         {
+             planner_times.back()+=plan_time_limit;
++            planner_seconds = static_cast<double>(plan_time_limit);
+         }
+         else
+         {
+             auto diff = end-start;
+-            planner_times.push_back(std::chrono::duration<double>(diff).count());
++            planner_seconds = std::chrono::duration<double>(diff).count();
++            planner_times.push_back(planner_seconds);
+         }
++        planner_time_trace.push_back(make_tuple(
++            timestep, planner_seconds, planner_timed_out
++        ));
+         ONLYDEV(cout <<"---timestep-task-finished,"<< new_finished_tasks.size() << std::endl;)
+ 
+         // update tasks
+@@ -406,13 +692,14 @@ void BaseSystem::simulate(int simulation_time){
+                         break;
+                     }
+             }
+-        if (complete_all)
++        if (complete_all && !absolute_task_tape_enabled)
+             {
+                 cout << std::endl << "All task finished!" << std::endl;
+                 break;
+             }
+     }
+ 
++    trace_window_end_timestep = timestep;
+     cout << std::endl << "Done!" << std::endl;
+ }
+ 
+@@ -422,7 +709,19 @@ void BaseSystem::initialize() {
+ 
+ 
+     paths.resize(num_of_agents);
++    events.clear();
+     events.resize(num_of_agents);
++    planner_time_trace.clear();
++    next_trace_event_id = 0;
++    route_build_trace.clear();
++    next_route_build_event_id = 0;
++    last_route_exposed_task_ids.assign(num_of_agents, -1);
++    last_route_plan_map_weights_revisions.assign(num_of_agents, -1);
++    map_weights_revision = 0;
++    pending_route_snapshot_valid = false;
++    trace_window_start_timestep = 0;
++    trace_window_end_timestep = 0;
++    trace_window_is_warmup = false;
+     env->num_of_agents = num_of_agents;
+     env->rows = map.rows;
+     env->cols = map.cols;
+@@ -671,7 +970,9 @@ void BaseSystem::saveResults(const string &fileName) const
+                     std::string event_msg;
+                     int task_id;
+                     int timestep;
+-                    std::tie(task_id,timestep,event_msg) = e;
++                    std::tie(
++                        std::ignore, task_id, timestep, event_msg, std::ignore
++                    ) = e;
+                     ev.push_back(task_id);
+                     ev.push_back(timestep);
+                     ev.push_back(event_msg);
+@@ -761,6 +1062,16 @@ nlohmann::json BaseSystem::analyzeResults(int simulation_time) const
+ 
+ nlohmann::json BaseSystem::analyzeCurrResults(int summarize_interval) const
+ {
++    const int window_start_timestep = this->trace_window_start_timestep;
++    const int window_end_timestep = this->trace_window_end_timestep;
++    const int actual_executed_steps = std::max(
++        0, window_end_timestep - window_start_timestep
++    );
++    // The caller historically supplied the configured interval.  Use the
++    // simulator-recorded interval instead so a final partial window cannot
++    // overlap the preceding window.
++    summarize_interval = actual_executed_steps;
++
+     for (auto error: model->errors){
+         std::string error_msg;
+         std::cout<<error_msg<<std::endl;
+@@ -796,11 +1107,13 @@ nlohmann::json BaseSystem::analyzeCurrResults(int summarize_interval) const
+         std::string path;
+         bool first = true;
+         int move_size = actual_movements[i].size();
++        int agent_summarize_interval = std::min(summarize_interval, move_size);
+         if (summarize_interval > move_size){
+             std::cout << "warning: summarize_interval ["<<summarize_interval<<"] < actual_movement_size [" << move_size <<std::endl;
+-            summarize_interval = move_size;
+         }
+-        auto it = std::prev(actual_movements[i].end(), summarize_interval);
++        auto it = std::prev(
++            actual_movements[i].end(), agent_summarize_interval
++        );
+         for (; it!=actual_movements[i].end(); ++it){
+             if (!first){
+                 path+= ",";
+@@ -814,12 +1127,17 @@ nlohmann::json BaseSystem::analyzeCurrResults(int summarize_interval) const
+     }
+ 
+     json curr_tasks = json::array();
++    json curr_task_active = json::array();
+     for (int i = 0; i < num_of_agents; i++){
+-        int location = this->assigned_tasks[i][0].location;
++        const bool active = !this->assigned_tasks[i].empty();
++        int location = active
++            ? this->assigned_tasks[i][0].location
++            : this->curr_states[i].location;
+         json s = json::array();
+         s.push_back(location/this->env->cols);
+         s.push_back(location%this->env->cols);
+         curr_tasks.push_back(s);
++        curr_task_active.push_back(active);
+     }
+ 
+     json curr_states_json = json::array();
+@@ -832,14 +1150,269 @@ nlohmann::json BaseSystem::analyzeCurrResults(int summarize_interval) const
+     }
+ 
+     bool done = this->timestep >= (this->warmup_time + this->simulation_time);
++
++    // Research instrumentation. Step windows are (start, end]. The warmup
++    // trace additionally includes initialization assignments at timestep 0 by
++    // setting event_start_exclusive to -1. Every later event belongs to exactly
++    // one returned window.
++    json recent_events = json::array();
++    const int event_start_exclusive =
++        trace_window_is_warmup && window_start_timestep == 0
++            ? -1
++            : window_start_timestep;
++    std::vector<std::tuple<long long,int,int,int,std::string,int>> window_events;
++    for (int i = 0; i < num_of_agents; i++){
++        for (auto event_it = events[i].rbegin(); event_it != events[i].rend(); ++event_it){
++            const int event_timestep = std::get<2>(*event_it);
++            if (event_timestep > window_end_timestep){
++                continue;
++            }
++            if (event_timestep <= event_start_exclusive){
++                break;
++            }
++            window_events.push_back(make_tuple(
++                std::get<0>(*event_it), i, std::get<1>(*event_it),
++                event_timestep, std::get<3>(*event_it), std::get<4>(*event_it)
++            ));
++        }
++    }
++    std::sort(
++        window_events.begin(), window_events.end(),
++        [](const auto& lhs, const auto& rhs){
++            return std::get<0>(lhs) < std::get<0>(rhs);
++        }
++    );
++    for (const auto& event: window_events){
++        const int goal_location = std::get<5>(event);
++        recent_events.push_back({
++            {"event_id", std::get<0>(event)},
++            {"agent_id", std::get<1>(event)},
++            {"task_id", std::get<2>(event)},
++            {"timestep", std::get<3>(event)},
++            {"event_type", std::get<4>(event)},
++            {"goal_loc", {
++                goal_location / this->env->cols,
++                goal_location % this->env->cols
++            }}
++        });
++    }
++
++    json recent_planner_times = json::array();
++    std::vector<std::tuple<int,double,bool>> window_planner_times;
++    for (
++        auto planner_it = planner_time_trace.rbegin();
++        planner_it != planner_time_trace.rend();
++        ++planner_it
++    ){
++        const int planner_timestep = std::get<0>(*planner_it);
++        if (planner_timestep > window_end_timestep){
++            continue;
++        }
++        if (planner_timestep <= window_start_timestep){
++            break;
++        }
++        window_planner_times.push_back(*planner_it);
++    }
++    std::reverse(window_planner_times.begin(), window_planner_times.end());
++    for (const auto& planner_time: window_planner_times){
++        const bool timed_out = std::get<2>(planner_time);
++        recent_planner_times.push_back({
++            {"timestep", std::get<0>(planner_time)},
++            {"seconds", std::get<1>(planner_time)},
++            {"timed_out", timed_out},
++            {"seconds_source", timed_out ? "timeout_limit" : "steady_clock"}
++        });
++    }
++
++    json recent_route_builds = json::array();
++    std::vector<decltype(route_build_trace)::value_type> window_route_builds;
++    for (
++        auto route_it = route_build_trace.rbegin();
++        route_it != route_build_trace.rend();
++        ++route_it
++    ){
++        const int execution_timestep = std::get<4>(*route_it);
++        if (execution_timestep > window_end_timestep){
++            continue;
++        }
++        if (execution_timestep <= event_start_exclusive){
++            break;
++        }
++        window_route_builds.push_back(*route_it);
++    }
++    std::reverse(window_route_builds.begin(), window_route_builds.end());
++    for (const auto& route_build: window_route_builds){
++        const int execution_timestep = std::get<4>(route_build);
++        const int goal_location = std::get<3>(route_build);
++        recent_route_builds.push_back({
++            {"event_id", std::get<0>(route_build)},
++            {"agent_id", std::get<1>(route_build)},
++            {"task_id", std::get<2>(route_build)},
++            {"goal_loc", {
++                goal_location / this->env->cols,
++                goal_location % this->env->cols
++            }},
++            {"execution_timestep", execution_timestep},
++            {"map_weights_revision", std::get<5>(route_build)},
++            {"reason", std::get<6>(route_build)}
++        });
++    }
++
++    json recent_distribution_updates = json::array();
++    for (const auto& update: distribution_update_trace){
++        const int update_timestep = update.at("timestep").get<int>();
++        if (
++            update_timestep > event_start_exclusive
++            && update_timestep <= window_end_timestep
++        ){
++            recent_distribution_updates.push_back(update);
++        }
++    }
++
++#ifdef GUIDANCE
++    constexpr bool build_guidance = true;
++#else
++    constexpr bool build_guidance = false;
++#endif
++#ifdef GUIDANCE_LNS
++    constexpr int build_guidance_lns = GUIDANCE_LNS;
++#else
++    constexpr int build_guidance_lns = 0;
++#endif
++#ifdef FLOW_GUIDANCE
++    constexpr bool build_flow_guidance = true;
++#else
++    constexpr bool build_flow_guidance = false;
++#endif
++#ifdef INIT_PP
++    constexpr bool build_init_pp = true;
++#else
++    constexpr bool build_init_pp = false;
++#endif
++
++    json task_tape;
++    if (absolute_task_tape_enabled){
++        task_tape = {
++            {"schema_version", "dai.kiva-absolute-release-tape/v1"},
++            {"enabled", true},
++            {"mode", "absolute_release_queue_per_agent"},
++            {"manifest_sha256", absolute_task_tape_manifest_sha256},
++            {"content_fnv1a64", absolute_task_tape_content_fnv1a64},
++            {"start_locations", absolute_task_tape_start_locations},
++            {"per_agent_lengths", absolute_task_tape_lengths},
++            {"released_prefix_lengths", absolute_task_tape_released_prefix},
++            {"assigned_prefix_lengths", absolute_task_tape_assigned_prefix},
++            {"completed_prefix_lengths", json::array()},
++            {"total_tasks", absolute_task_tape_total_tasks},
++            {"all_released", true},
++            {"all_completed", true},
++            {"online_workload_rng_draws", 0},
++            {
++                "task_id_semantics",
++                "agent-major contiguous offset plus per-agent tape index"
++            },
++            {
++                "fingerprint_semantics",
++                "fnv1a64(schema,agent_count,agent_id,start_loc,length,flat_goal_loc,release_timestep),little-endian-u64"
++            },
++            {
++                "release_timestep_semantics",
++                "r=0 before first plan; r=t>0 after the move ending at t and before the decision at t; released tasks enter a per-agent FIFO backlog"
++            }
++        };
++        for (int agent_id = 0; agent_id < num_of_agents; ++agent_id){
++            const std::uint64_t completed = static_cast<std::uint64_t>(
++                finished_tasks[agent_id].size()
++            );
++            task_tape["completed_prefix_lengths"].push_back(completed);
++            if (
++                absolute_task_tape_released_prefix[agent_id]
++                != absolute_task_tape_lengths[agent_id]
++            ){
++                task_tape["all_released"] = false;
++            }
++            if (completed != absolute_task_tape_lengths[agent_id]){
++                task_tape["all_completed"] = false;
++            }
++        }
++    } else {
++        task_tape = {
++            {"schema_version", "dai.saturated-goal-tape/v1"},
++            {"enabled", fixed_goal_tape_enabled},
++            {
++                "mode",
++                fixed_goal_tape_enabled
++                    ? "saturated_backlog_per_agent"
++                    : "online_completion_driven_rng"
++            },
++            {"manifest_sha256", fixed_goal_tape_manifest_sha256},
++            {"content_fnv1a64", fixed_goal_tape_content_fnv1a64},
++            {"start_locations", fixed_goal_tape_start_locations},
++            {"per_agent_lengths", fixed_goal_tape_lengths},
++            {"assigned_prefix_lengths", fixed_goal_tape_assigned_prefix},
++            {"completed_prefix_lengths", json::array()},
++            {"total_tasks", fixed_goal_tape_total_tasks},
++            {"exhausted", fixed_goal_tape_exhausted},
++            {
++                "task_id_semantics",
++                "agent-major contiguous offset plus per-agent tape index"
++            },
++            {
++                "fingerprint_semantics",
++                "fnv1a64(schema,agent_count,agent_id,start_loc,length,flat_goal_loc),little-endian-u64"
++            }
++        };
++    }
++    if (fixed_goal_tape_enabled){
++        for (int agent_id = 0; agent_id < num_of_agents; ++agent_id){
++            task_tape["completed_prefix_lengths"].push_back(
++                static_cast<std::uint64_t>(finished_tasks[agent_id].size())
++            );
++        }
++    }
+     
+     nlohmann::json result;
+     result = {
+         {"num_task_finished", this->num_of_task_finish}, // cumulative
+         {"actual_paths", apaths}, // only current
+         {"curr_tasks", curr_tasks}, 
++        {"curr_task_active", curr_task_active},
+         {"curr_pos", curr_states_json}, 
+         {"start", start}, 
++        {"timestep", this->timestep},
++        {"trace_schema_version", "dai.onlineggo.trace/v3"},
++        {"window_start_timestep", window_start_timestep},
++        {"window_end_timestep", window_end_timestep},
++        {"actual_executed_steps", actual_executed_steps},
++        {"window_interval_semantics", "(window_start_timestep,window_end_timestep]"},
++        {"event_start_exclusive", event_start_exclusive},
++        {"event_interval_semantics", "(event_start_exclusive,window_end_timestep]"},
++        {"is_warmup", trace_window_is_warmup},
++        {"planner_timeout_limit_seconds", this->plan_time_limit},
++        {"planner_time_seconds_semantics", "steady_clock unless timed_out; timeout uses configured limit"},
++        {"recent_events", recent_events},
++        {"recent_planner_times", recent_planner_times},
++        {"recent_route_builds", recent_route_builds},
++        {"recent_distribution_updates", recent_distribution_updates},
++        {"map_weights_revision", map_weights_revision},
++        {"route_build_trace_valid", !has_timeout},
++        {"build_flags", {
++            {"guidance", build_guidance},
++            {"guidance_lns", build_guidance_lns},
++            {"flow_guidance", build_flow_guidance},
++            {"init_pp", build_init_pp},
++            {"objective", OBJECTIVE}
++        }},
++        {"seed_bundle", {
++            {"schema_version", "dai.seed-split/v1"},
++            {"episode_seed", this->episode_seed},
++            {"planner_priority_seed", this->planner_priority_seed},
++            {"start_seed", this->start_seed},
++            {"task_seed", this->task_seed},
++            {"distribution_seed", this->distribution_seed}
++        }},
++        {"task_tape", task_tape},
++        {"planner_initial_priority_order", this->planner->ids},
+         {"done", done}
+     };
+     return result;
+@@ -907,7 +1480,10 @@ void FixedAssignSystem::update_tasks(){
+             Task task = task_queue[k].front();
+             task_queue[k].pop_front();
+             assigned_tasks[k].push_back(task);
+-            events[k].push_back(make_tuple(task.task_id,timestep,"assigned"));
++            events[k].push_back(make_tuple(
++                next_trace_event_id++, task.task_id, timestep, "assigned",
++                task.location
++            ));
+             all_tasks.push_back(task);
+             // log_event_assigned(k, task.task_id, timestep);
+         }
+@@ -927,7 +1503,10 @@ void TaskAssignSystem::update_tasks(){
+                 task.agent_assigned = k;
+                 task_queue.pop_front();
+                 assigned_tasks[k].push_back(task);
+-                events[k].push_back(make_tuple(task.task_id,timestep,"assigned"));
++                events[k].push_back(make_tuple(
++                    next_trace_event_id++, task.task_id, timestep, "assigned",
++                    task.location
++                ));
+                 all_tasks.push_back(task);
+                 // log_event_assigned(k, task.task_id, timestep);
+             }
+@@ -941,7 +1520,10 @@ void InfAssignSystem::update_tasks(){
+             int loc = tasks[i%tasks_size];
+             Task task(task_id,loc,timestep,k);
+             assigned_tasks[k].push_back(task);
+-            events[k].push_back(make_tuple(task.task_id,timestep,"assigned"));
++            events[k].push_back(make_tuple(
++                next_trace_event_id++, task.task_id, timestep, "assigned",
++                task.location
++            ));
+             // log_event_assigned(k, task.task_id, loc, timestep);
+             all_tasks.push_back(task);
+             task_id++;
+@@ -951,11 +1533,317 @@ void InfAssignSystem::update_tasks(){
+     }
+ }
+ 
++void KivaSystem::configure_fixed_goal_tape(
++    const std::vector<int>& expected_start_locations,
++    const std::vector<std::vector<int>>& goal_tape,
++    const std::string& manifest_sha256
++){
++    if (!assigned_tasks.empty() || !all_tasks.empty()){
++        throw std::logic_error(
++            "fixed goal tape must be configured before simulator initialization"
++        );
++    }
++    if (!dai_is_lower_sha256(manifest_sha256)){
++        throw std::invalid_argument(
++            "fixed goal tape manifest sha256 must be 64 lowercase hex characters"
++        );
++    }
++    if (goal_tape.size() != static_cast<std::size_t>(num_of_agents)){
++        throw std::invalid_argument(
++            "fixed goal tape must contain exactly one sequence per agent"
++        );
++    }
++    if (
++        expected_start_locations.size()
++        != static_cast<std::size_t>(num_of_agents)
++    ){
++        throw std::invalid_argument(
++            "fixed goal tape manifest must contain one start per agent"
++        );
++    }
++    for (int agent_id = 0; agent_id < num_of_agents; ++agent_id){
++        if (expected_start_locations[agent_id] != starts[agent_id].location){
++            throw std::invalid_argument(
++                "fixed goal tape start locations disagree with the simulator seed"
++            );
++        }
++    }
++
++    std::uint64_t total_tasks = 0;
++    std::vector<std::uint64_t> tape_lengths;
++    std::vector<std::deque<Task>> task_queues(num_of_agents);
++    tape_lengths.reserve(num_of_agents);
++
++    int next_task_id = 0;
++    for (int agent_id = 0; agent_id < num_of_agents; ++agent_id){
++        const auto& agent_tape = goal_tape[agent_id];
++        if (agent_tape.empty()){
++            throw std::invalid_argument(
++                "fixed goal tape sequences must be non-empty"
++            );
++        }
++        if (
++            agent_tape.size()
++            > static_cast<std::size_t>(
++                std::numeric_limits<int>::max() - next_task_id
++            )
++        ){
++            throw std::overflow_error(
++                "fixed goal tape has more tasks than the int task-id range"
++            );
++        }
++
++        int previous_location = starts[agent_id].location;
++        for (const int goal_location: agent_tape){
++            if (
++                goal_location < 0
++                || goal_location >= static_cast<int>(map.map.size())
++                || map.map[goal_location] != 0
++            ){
++                throw std::invalid_argument(
++                    "fixed goal tape contains an invalid or blocked location"
++                );
++            }
++
++            const char previous_type = map.grid_types[previous_location];
++            bool valid_kiva_transition = false;
++            if (previous_type == 'W'){
++                valid_kiva_transition = dai_contains_location(
++                    map.end_points, goal_location
++                );
++            } else if (previous_type == '.' || previous_type == 'E'){
++                valid_kiva_transition = dai_contains_location(
++                    map.agent_home_locs, goal_location
++                );
++            }
++            if (!valid_kiva_transition){
++                throw std::invalid_argument(
++                    "fixed goal tape violates Kiva W/endpoint alternation"
++                );
++            }
++
++            task_queues[agent_id].emplace_back(
++                next_task_id++, goal_location, 0, agent_id
++            );
++            previous_location = goal_location;
++        }
++        tape_lengths.push_back(
++            static_cast<std::uint64_t>(agent_tape.size())
++        );
++        total_tasks += static_cast<std::uint64_t>(agent_tape.size());
++    }
++
++    fixed_goal_task_queues = std::move(task_queues);
++    fixed_goal_tape_enabled = true;
++    fixed_goal_tape_exhausted = false;
++    fixed_goal_tape_manifest_sha256 = manifest_sha256;
++    fixed_goal_tape_content_fnv1a64 = dai_fixed_goal_tape_fnv1a64(
++        expected_start_locations, goal_tape
++    );
++    fixed_goal_tape_start_locations = expected_start_locations;
++    fixed_goal_tape_lengths = std::move(tape_lengths);
++    fixed_goal_tape_assigned_prefix.assign(num_of_agents, 0);
++    fixed_goal_tape_total_tasks = total_tasks;
++}
++
++void KivaSystem::configure_absolute_task_tape(
++    const std::vector<int>& expected_start_locations,
++    const std::vector<std::vector<std::vector<int>>>& task_tape,
++    const std::string& manifest_sha256
++){
++    if (!assigned_tasks.empty() || !all_tasks.empty()){
++        throw std::logic_error(
++            "absolute task tape must be configured before initialization"
++        );
++    }
++    if (fixed_goal_tape_enabled){
++        throw std::logic_error(
++            "absolute and saturated fixed task tapes are mutually exclusive"
++        );
++    }
++    if (!dai_is_lower_sha256(manifest_sha256)){
++        throw std::invalid_argument(
++            "absolute task-tape manifest sha256 must be lowercase hex"
++        );
++    }
++    if (task_tape.size() != static_cast<std::size_t>(num_of_agents)){
++        throw std::invalid_argument(
++            "absolute task tape must contain one sequence per agent"
++        );
++    }
++    if (
++        expected_start_locations.size()
++        != static_cast<std::size_t>(num_of_agents)
++    ){
++        throw std::invalid_argument(
++            "absolute task-tape manifest must contain one start per agent"
++        );
++    }
++    for (int agent_id = 0; agent_id < num_of_agents; ++agent_id){
++        if (expected_start_locations[agent_id] != starts[agent_id].location){
++            throw std::invalid_argument(
++                "absolute task-tape starts disagree with the simulator seed"
++            );
++        }
++    }
++
++    std::uint64_t total_tasks = 0;
++    std::vector<std::uint64_t> tape_lengths;
++    std::vector<std::deque<DAIAbsoluteTask>> unreleased(num_of_agents);
++    tape_lengths.reserve(num_of_agents);
++    int next_task_id = 0;
++    for (int agent_id = 0; agent_id < num_of_agents; ++agent_id){
++        const auto& sequence = task_tape[agent_id];
++        if (sequence.empty()){
++            throw std::invalid_argument(
++                "absolute task-tape sequences must be non-empty"
++            );
++        }
++        if (
++            sequence.size()
++            > static_cast<std::size_t>(
++                std::numeric_limits<int>::max() - next_task_id
++            )
++        ){
++            throw std::overflow_error(
++                "absolute task tape exceeds the int task-id range"
++            );
++        }
++        int previous_location = starts[agent_id].location;
++        int previous_release = -1;
++        for (const auto& entry: sequence){
++            if (entry.size() != 2){
++                throw std::invalid_argument(
++                    "absolute task entries must be [goal, release_timestep]"
++                );
++            }
++            const int goal_location = entry[0];
++            const int release_timestep = entry[1];
++            if (release_timestep < 0 || release_timestep < previous_release){
++                throw std::invalid_argument(
++                    "absolute release timesteps must be non-negative and "
++                    "nondecreasing per agent"
++                );
++            }
++            if (
++                goal_location < 0
++                || goal_location >= static_cast<int>(map.map.size())
++                || map.map[goal_location] != 0
++            ){
++                throw std::invalid_argument(
++                    "absolute task tape contains an invalid goal"
++                );
++            }
++            const char previous_type = map.grid_types[previous_location];
++            bool valid_kiva_transition = false;
++            if (previous_type == 'W'){
++                valid_kiva_transition = dai_contains_location(
++                    map.end_points, goal_location
++                );
++            } else if (previous_type == '.' || previous_type == 'E'){
++                valid_kiva_transition = dai_contains_location(
++                    map.agent_home_locs, goal_location
++                );
++            }
++            if (!valid_kiva_transition){
++                throw std::invalid_argument(
++                    "absolute task tape violates Kiva W/endpoint alternation"
++                );
++            }
++            unreleased[agent_id].emplace_back(
++                Task(next_task_id++, goal_location, -1, agent_id),
++                release_timestep
++            );
++            previous_location = goal_location;
++            previous_release = release_timestep;
++        }
++        tape_lengths.push_back(sequence.size());
++        total_tasks += sequence.size();
++    }
++
++    absolute_task_unreleased_queues = std::move(unreleased);
++    absolute_task_released_backlogs.clear();
++    absolute_task_released_backlogs.resize(num_of_agents);
++    absolute_task_tape_enabled = true;
++    absolute_task_tape_manifest_sha256 = manifest_sha256;
++    absolute_task_tape_content_fnv1a64 = dai_absolute_task_tape_fnv1a64(
++        expected_start_locations, task_tape
++    );
++    absolute_task_tape_start_locations = expected_start_locations;
++    absolute_task_tape_lengths = std::move(tape_lengths);
++    absolute_task_tape_released_prefix.assign(num_of_agents, 0);
++    absolute_task_tape_assigned_prefix.assign(num_of_agents, 0);
++    absolute_task_tape_total_tasks = total_tasks;
++}
++
+ void KivaSystem::update_tasks(){
+     for (int k = 0; k < num_of_agents; k++)
+     {
++        if (absolute_task_tape_enabled){
++            while (
++                !absolute_task_unreleased_queues[k].empty()
++                && absolute_task_unreleased_queues[k].front().release_timestep
++                    <= timestep
++            ){
++                DAIAbsoluteTask released =
++                    absolute_task_unreleased_queues[k].front();
++                absolute_task_unreleased_queues[k].pop_front();
++                if (released.release_timestep != timestep){
++                    throw std::logic_error(
++                        "absolute task release was not processed at its exact "
++                        "simulator timestep"
++                    );
++                }
++                absolute_task_released_backlogs[k].push_back(released.task);
++                events[k].push_back(make_tuple(
++                    next_trace_event_id++, released.task.task_id,
++                    released.release_timestep, "released",
++                    released.task.location
++                ));
++                absolute_task_tape_released_prefix[k]++;
++            }
++            while (
++                assigned_tasks[k].size() < num_tasks_reveal
++                && !absolute_task_released_backlogs[k].empty()
++            ){
++                Task task = absolute_task_released_backlogs[k].front();
++                absolute_task_released_backlogs[k].pop_front();
++                task.t_assigned = timestep;
++                assigned_tasks[k].push_back(task);
++                events[k].push_back(make_tuple(
++                    next_trace_event_id++, task.task_id, timestep, "assigned",
++                    task.location
++                ));
++                all_tasks.push_back(task);
++                prev_task_locs[k] = task.location;
++                absolute_task_tape_assigned_prefix[k]++;
++            }
++            continue;
++        }
+         while (assigned_tasks[k].size() < num_tasks_reveal) 
+         {
++            if (fixed_goal_tape_enabled){
++                if (fixed_goal_task_queues[k].empty()){
++                    fixed_goal_tape_exhausted = true;
++                    throw std::runtime_error(
++                        "fixed saturated goal tape exhausted for agent "
++                        + std::to_string(k)
++                    );
++                }
++                Task task = fixed_goal_task_queues[k].front();
++                fixed_goal_task_queues[k].pop_front();
++                task.t_assigned = timestep;
++                assigned_tasks[k].push_back(task);
++                events[k].push_back(make_tuple(
++                    next_trace_event_id++, task.task_id, timestep, "assigned",
++                    task.location
++                ));
++                all_tasks.push_back(task);
++                prev_task_locs[k] = task.location;
++                fixed_goal_tape_assigned_prefix[k]++;
++                continue;
++            }
++
+             int prev_task_loc=prev_task_locs[k];
+ 
+             int loc;
+@@ -963,13 +1851,17 @@ void KivaSystem::update_tasks(){
+             {
+                 // next task would be w
+                 // Sample a workstation based on given distribution
+-                int idx = this->agent_home_loc_dist(this->MT);
++                int idx = this->agent_home_loc_dist(
++                    this->task_rng_by_agent[k]
++                );
+                 // int idx=MT()%map.agent_home_locations.size();
+                 loc=map.agent_home_locs[idx];
+             } else if (map.grid_types[prev_task_loc]=='W')
+             {
+                 // next task would e
+-                int idx= this->agent_end_pts_dist(this->MT);
++                int idx = this->agent_end_pts_dist(
++                    this->task_rng_by_agent[k]
++                );
+                 loc=map.end_points[idx];
+             } else {
+                 std::cout<<"unkonw grid type"<<std::endl;
+@@ -978,7 +1870,10 @@ void KivaSystem::update_tasks(){
+             
+             Task task(task_id,loc,timestep,k);
+             assigned_tasks[k].push_back(task);
+-            events[k].push_back(make_tuple(task.task_id,timestep,"assigned"));
++            events[k].push_back(make_tuple(
++                next_trace_event_id++, task.task_id, timestep, "assigned",
++                task.location
++            ));
+             // log_event_assigned(k, task.task_id, timestep);
+             all_tasks.push_back(task);
+             prev_task_locs[k]=loc;
+@@ -990,11 +1885,26 @@ void KivaSystem::update_tasks(){
+ void KivaSystem::random_update_tasks_distribution(){
+     std::cout << "KivaSystem::random_update_tasks_distribution, random_type="<<this->random_type<<std::endl;
+     if (this->random_type == "Gaussian"){
+-        generateTaskAndAgentGaussianDist(this->map, this->MT, this->home_loc_weights, this->end_pts_weights);
++        generateTaskAndAgentGaussianDist(
++            this->map,
++            this->distribution_rng,
++            this->home_loc_weights,
++            this->end_pts_weights
++        );
+     } else if (this->random_type == "GaussianMixed") {
+-        generateTaskAndAgentMultiModeGaussianDist(this->map, this->MT, this->home_loc_weights, this->end_pts_weights);
++        generateTaskAndAgentMultiModeGaussianDist(
++            this->map,
++            this->distribution_rng,
++            this->home_loc_weights,
++            this->end_pts_weights
++        );
+     } else if (this->random_type == "LR"){
+-        generateTaskAndAgentLRDist(this->map, this->MT, this->home_loc_weights, this->end_pts_weights);
++        generateTaskAndAgentLRDist(
++            this->map,
++            this->distribution_rng,
++            this->home_loc_weights,
++            this->end_pts_weights
++        );
+     } else if (this->random_type == "uniform") {
+         this->home_loc_weights.clear();
+         this->home_loc_weights.resize(this->map.agent_home_locs.size(), 1.0);
+@@ -1026,18 +1936,29 @@ void KivaSystem::random_update_tasks_distribution(){
+         this->end_pts_weights.begin(),
+         this->end_pts_weights.end()
+     );
++
++    this->distribution_update_trace.push_back({
++        {"timestep", this->timestep},
++        {"random_type", this->random_type},
++        {"source", "kiva"},
++        {"primary_weights", this->home_loc_weights},
++        {"secondary_weights", this->end_pts_weights}
++    });
+ }
+ 
+ 
+ void OnlineGenerateTaskSystem::update_tasks(){
+     for (int k=0; k<this->num_of_agents; ++k){
+         while(assigned_tasks[k].size() < this->num_tasks_reveal){
+-            int idx = this->goal_loc_dist(this->MT);
++            int idx = this->goal_loc_dist(this->task_rng_by_agent[k]);
+             int loc = this->map.empty_locs[idx];
+ 
+             Task task(this->task_id, loc, this->timestep, k);
+             assigned_tasks[k].push_back(task);
+-            events[k].push_back(make_tuple(task.task_id, this->timestep, "assigned"));
++            events[k].push_back(make_tuple(
++                next_trace_event_id++, task.task_id, this->timestep,
++                "assigned", task.location
++            ));
+             // log_event_assigned(k, task.task_id, timestep);
+             all_tasks.push_back(task);
+             task_id++;
+@@ -1051,9 +1972,13 @@ void OnlineGenerateTaskSystem::random_update_tasks_distribution(){
+         this->empty_weights.clear();
+         this->empty_weights.resize(this->map.empty_locs.size(), 1);
+     } else if (this->random_type == "Gaussian"){
+-        generateTaskAndAgentGaussianEmptyDist(this->map, this->MT, this->empty_weights);
++        generateTaskAndAgentGaussianEmptyDist(
++            this->map, this->distribution_rng, this->empty_weights
++        );
+     } else if (this->random_type == "GaussianMixed"){
+-        generateMultiModeGaussianEmptyDist(this->map, this->MT, this->empty_weights);
++        generateMultiModeGaussianEmptyDist(
++            this->map, this->distribution_rng, this->empty_weights
++        );
+     } else {
+         std::cout << "random type [" << this->random_type << "] is not supported in OnlineGenerateSystem yet!" <<std::endl;
+         exit(1);
+@@ -1061,4 +1986,11 @@ void OnlineGenerateTaskSystem::random_update_tasks_distribution(){
+     this->goal_loc_dist = std::discrete_distribution<int>(
+         this->empty_weights.begin(), this->empty_weights.end()
+     );
+-}
+\ No newline at end of file
++    this->distribution_update_trace.push_back({
++        {"timestep", this->timestep},
++        {"random_type", this->random_type},
++        {"source", "online_generate"},
++        {"primary_weights", this->empty_weights},
++        {"secondary_weights", std::vector<double>()}
++    });
++}
+diff --git a/Guided-PIBT/guided-pibt/src/MAPFPlanner.cpp b/Guided-PIBT/guided-pibt/src/MAPFPlanner.cpp
+index 87de4c5..7c2b7e6 100644
+--- a/Guided-PIBT/guided-pibt/src/MAPFPlanner.cpp
++++ b/Guided-PIBT/guided-pibt/src/MAPFPlanner.cpp
+@@ -80,7 +80,10 @@ void MAPFPlanner::initialize(int preprocess_time_limit) {
+ 
+     env->init_neighbor();
+ 
+-    std::shuffle(ids.begin(), ids.end(), std::mt19937(std::random_device()()));
++    // The episode seed must control the initial PIBT priority order.  Using
++    // random_device here made identical simulator seeds produce different
++    // paths, task completions, and later task-distribution draws.
++    std::shuffle(ids.begin(), ids.end(), std::mt19937(random_seed));
+     for (int i = 0; i < ids.size();i++){
+         p[ids[i]] = ((double)(ids.size() - i))/((double)(ids.size()+1));
+     }
+diff --git a/Guided-PIBT/guided-pibt/src/TaskDistGenerator.cpp b/Guided-PIBT/guided-pibt/src/TaskDistGenerator.cpp
+index 21790ec..b5891e2 100644
+--- a/Guided-PIBT/guided-pibt/src/TaskDistGenerator.cpp
++++ b/Guided-PIBT/guided-pibt/src/TaskDistGenerator.cpp
+@@ -149,7 +149,6 @@ void generateTaskAndAgentGaussianEmptyDist(const Grid& map, mt19937& MT, vector<
+     int h = map.rows;
+     int w = map.cols;
+ 
+-    random_device rd;
+     uniform_int_distribution<> dis_h(0, h - 1);
+     uniform_int_distribution<> dis_w(0, w - 1);
+     
+@@ -213,4 +212,4 @@ void generateTaskAndAgentLRDist(const Grid& map, mt19937& MT, vector<double>& w_
+ 
+     e_dist.clear();
+     e_dist.resize(map.end_points.size(), 1.0);
+-}
+\ No newline at end of file
++}
+diff --git a/Guided-PIBT/guided-pibt/src/period_on_sim.cpp b/Guided-PIBT/guided-pibt/src/period_on_sim.cpp
+index dbc2b9c..e73129c 100644
+--- a/Guided-PIBT/guided-pibt/src/period_on_sim.cpp
++++ b/Guided-PIBT/guided-pibt/src/period_on_sim.cpp
+@@ -6,6 +6,15 @@ PYBIND11_MODULE(period_on_sim, m){
+         .def(py::init<py::kwargs>())
+         .def("warmup", &period_on_sim::warmup)
+         .def("update_gg_and_step", &period_on_sim::update_gg_and_step);
++    m.def(
++        "generate_kiva_saturated_goal_tape",
++        &generate_kiva_saturated_goal_tape,
++        py::arg("map_path"),
++        py::arg("num_agents"),
++        py::arg("goals_per_agent"),
++        py::arg("episode_seed"),
++        "Pre-generate an explicit per-agent uniform Kiva goal tape."
++    );
+ }
+ 
+ 
+@@ -28,8 +37,10 @@ std::string period_on_sim::update_gg_and_step(std::vector<double> map_weights){
+ }
+ 
+ void gen_random_instance(Grid & grid, std::vector<int> & agents, std::vector<int> & tasks, 
+-    int num_agents, int num_tasks, uint seed) {
+-    std::mt19937 MT(seed);
++    int num_agents, int num_tasks, std::uint32_t start_seed,
++    std::uint32_t task_seed) {
++    std::mt19937 start_rng(start_seed);
++    std::mt19937 task_rng(task_seed);
+ 
+     std::vector<int> empty_locs;
+     for (int i=0;i<grid.map.size();++i) {
+@@ -38,7 +49,7 @@ void gen_random_instance(Grid & grid, std::vector<int> & agents, std::vector<int
+         }
+     }
+ 
+-    std::shuffle(empty_locs.begin(), empty_locs.end(), MT);
++    std::shuffle(empty_locs.begin(), empty_locs.end(), start_rng);
+ 
+     for (int i=0;i<num_agents;++i) {
+         agents.push_back(empty_locs[i]);
+@@ -49,29 +60,137 @@ void gen_random_instance(Grid & grid, std::vector<int> & agents, std::vector<int
+         std::cout<<"sample goal locations from end points"<<std::endl;
+         std::uniform_real_distribution<> dis(0.0, 1.0);
+         for (int i=0;i<num_tasks;++i) {
+-            double p = dis(MT);
++            double p = dis(task_rng);
+             if (p < 0.5){
+-                int rnd_idx=MT()%grid.end_points.size();
++                int rnd_idx=task_rng()%grid.end_points.size();
+                 tasks.push_back(grid.end_points[rnd_idx]);
+             } else {
+-                int rnd_idx=MT()%grid.sortation_points.size();
++                int rnd_idx=task_rng()%grid.sortation_points.size();
+                 tasks.push_back(grid.sortation_points[rnd_idx]);
+             }
+         }        
+     } else {
+         std::cout<<"sample goal locations from empty locations"<<std::endl;
+         for (int i=0;i<num_tasks;++i) {
+-            int rnd_idx=MT()%empty_locs.size();
++            int rnd_idx=task_rng()%empty_locs.size();
+             tasks.push_back(empty_locs[rnd_idx]);
+         }
+     }
+ }
+ 
++py::dict generate_kiva_saturated_goal_tape(
++    const std::string& map_path,
++    int num_agents,
++    int goals_per_agent,
++    std::uint32_t episode_seed
++){
++    if (num_agents <= 0){
++        throw std::invalid_argument("num_agents must be positive");
++    }
++    if (goals_per_agent <= 0){
++        throw std::invalid_argument("goals_per_agent must be positive");
++    }
++
++    Grid tape_grid;
++    tape_grid.load_from_path(map_path);
++    if (tape_grid.agent_home_locs.empty() || tape_grid.end_points.empty()){
++        throw std::invalid_argument(
++            "saturated Kiva goal tapes require W and E locations"
++        );
++    }
++    if (num_agents > static_cast<int>(tape_grid.empty_locs.size())){
++        throw std::invalid_argument(
++            "num_agents exceeds the number of traversable start locations"
++        );
++    }
++
++    const std::uint32_t start_seed = dai_derive_seed(episode_seed, 1);
++    const std::uint32_t task_seed = dai_derive_seed(episode_seed, 2);
++    std::mt19937 start_rng(start_seed);
++    std::shuffle(
++        tape_grid.empty_locs.begin(), tape_grid.empty_locs.end(), start_rng
++    );
++
++    std::vector<int> starts(
++        tape_grid.empty_locs.begin(),
++        tape_grid.empty_locs.begin() + num_agents
++    );
++    std::vector<std::vector<int>> goal_tape(
++        num_agents, std::vector<int>()
++    );
++    const std::vector<double> endpoint_weights(
++        tape_grid.end_points.size(), 1.0
++    );
++    std::discrete_distribution<int> home_distribution(
++        tape_grid.agent_home_loc_weights.begin(),
++        tape_grid.agent_home_loc_weights.end()
++    );
++    std::discrete_distribution<int> endpoint_distribution(
++        endpoint_weights.begin(), endpoint_weights.end()
++    );
++
++    for (int agent_id = 0; agent_id < num_agents; ++agent_id){
++        std::mt19937 task_rng(dai_derive_seed(
++            task_seed, static_cast<std::uint64_t>(agent_id)
++        ));
++        goal_tape[agent_id].reserve(goals_per_agent);
++        int previous_location = starts[agent_id];
++        for (int tape_index = 0; tape_index < goals_per_agent; ++tape_index){
++            const char previous_type = tape_grid.grid_types[previous_location];
++            int goal_location;
++            if (previous_type == 'W'){
++                goal_location = tape_grid.end_points[
++                    endpoint_distribution(task_rng)
++                ];
++            } else if (previous_type == '.' || previous_type == 'E'){
++                goal_location = tape_grid.agent_home_locs[
++                    home_distribution(task_rng)
++                ];
++            } else {
++                throw std::runtime_error(
++                    "generated Kiva start/goal has an unsupported grid type"
++                );
++            }
++            goal_tape[agent_id].push_back(goal_location);
++            previous_location = goal_location;
++        }
++    }
++
++    py::dict result;
++    result["schema_version"] = "dai.saturated-goal-tape-generator/v1";
++    result["workload"] = "uniform_kiva_saturated_backlog";
++    result["episode_seed"] = episode_seed;
++    result["start_seed"] = start_seed;
++    result["task_seed"] = task_seed;
++    result["num_agents"] = num_agents;
++    result["goals_per_agent"] = goals_per_agent;
++    result["start_locations"] = starts;
++    result["goal_tape"] = goal_tape;
++    result["content_fnv1a64"] = dai_fixed_goal_tape_fnv1a64(
++        starts, goal_tape
++    );
++    return result;
++}
++
+ 
+ period_on_sim::period_on_sim(py::kwargs kwargs){
+     int plan_time_limit = 10;
+     Logger* logger = new Logger();
++
++    if (!kwargs.contains("seed")){
++        std::cout << "kwargs must contain [seed]! " << std::endl;
++        exit(-1);
++    }
++    const std::uint32_t episode_seed = kwargs["seed"].cast<std::uint32_t>();
++    const std::uint32_t planner_priority_seed = dai_derive_seed(
++        episode_seed, 0
++    );
++    const std::uint32_t start_seed = dai_derive_seed(episode_seed, 1);
++    const std::uint32_t task_seed = dai_derive_seed(episode_seed, 2);
++    const std::uint32_t distribution_seed = dai_derive_seed(episode_seed, 3);
++
+     this->planner = new MAPFPlanner();
++    this->planner->set_seed(planner_priority_seed);
+ 
+     std::string inputFilePath = "";
+ 
+@@ -82,6 +201,63 @@ period_on_sim::period_on_sim(py::kwargs kwargs){
+ 
+     std::string map_path;
+     std::string task_assignment_strategy;
++    const bool has_fixed_goal_tape = kwargs.contains("fixed_goal_tape");
++    const bool has_absolute_task_tape = kwargs.contains("absolute_task_tape");
++    if (has_fixed_goal_tape && has_absolute_task_tape){
++        throw std::invalid_argument(
++            "fixed_goal_tape and absolute_task_tape are mutually exclusive"
++        );
++    }
++    if (
++        has_fixed_goal_tape
++        != kwargs.contains("fixed_goal_tape_manifest_sha256")
++        || has_fixed_goal_tape
++            != kwargs.contains("fixed_goal_tape_start_locations")
++    ){
++        throw std::invalid_argument(
++            "fixed_goal_tape, fixed_goal_tape_start_locations, and "
++            "fixed_goal_tape_manifest_sha256 must be provided together"
++        );
++    }
++    std::vector<int> fixed_goal_tape_start_locations;
++    std::vector<std::vector<int>> fixed_goal_tape;
++    std::string fixed_goal_tape_manifest_sha256;
++    if (has_fixed_goal_tape){
++        fixed_goal_tape_start_locations = kwargs[
++            "fixed_goal_tape_start_locations"
++        ].cast<std::vector<int>>();
++        fixed_goal_tape = kwargs["fixed_goal_tape"].cast<
++            std::vector<std::vector<int>>
++        >();
++        fixed_goal_tape_manifest_sha256 = kwargs[
++            "fixed_goal_tape_manifest_sha256"
++        ].cast<std::string>();
++    }
++    if (
++        has_absolute_task_tape
++        != kwargs.contains("absolute_task_tape_manifest_sha256")
++        || has_absolute_task_tape
++            != kwargs.contains("absolute_task_tape_start_locations")
++    ){
++        throw std::invalid_argument(
++            "absolute_task_tape, absolute_task_tape_start_locations, and "
++            "absolute_task_tape_manifest_sha256 must be provided together"
++        );
++    }
++    std::vector<int> absolute_task_tape_start_locations;
++    std::vector<std::vector<std::vector<int>>> absolute_task_tape;
++    std::string absolute_task_tape_manifest_sha256;
++    if (has_absolute_task_tape){
++        absolute_task_tape_start_locations = kwargs[
++            "absolute_task_tape_start_locations"
++        ].cast<std::vector<int>>();
++        absolute_task_tape = kwargs["absolute_task_tape"].cast<
++            std::vector<std::vector<std::vector<int>>>
++        >();
++        absolute_task_tape_manifest_sha256 = kwargs[
++            "absolute_task_tape_manifest_sha256"
++        ].cast<std::string>();
++    }
+     
+     int num_tasks_reveal = 1;
+     if (!gen_tasks){
+@@ -126,7 +302,6 @@ period_on_sim::period_on_sim(py::kwargs kwargs){
+         }
+         map_path = kwargs["map_path"].cast<std::string>();
+         int num_agents, num_tasks;
+-        uint seed;
+         if (kwargs.contains("num_agents")){
+             num_agents = kwargs["num_agents"].cast<int>();
+         } else {
+@@ -139,12 +314,6 @@ period_on_sim::period_on_sim(py::kwargs kwargs){
+             std::cout << "kwargs must contain [num_tasks]! " << std::endl;
+             exit(-1);
+         }
+-        if (kwargs.contains("seed")){
+-            seed = kwargs["seed"].cast<uint>();
+-        } else {
+-            std::cout << "kwargs must contain [seed]! " << std::endl;
+-            exit(-1);
+-        }
+         if (kwargs.contains("task_assignment_strategy")){
+             task_assignment_strategy = kwargs["task_assignment_strategy"].cast<std::string>();
+         } else {
+@@ -153,11 +322,24 @@ period_on_sim::period_on_sim(py::kwargs kwargs){
+         }
+         if (kwargs.contains("num_tasks_reveal")){
+             num_tasks_reveal = kwargs["num_tasks_reveal"].cast<int>();
++            if (num_tasks_reveal <= 0){
++                throw std::invalid_argument(
++                    "num_tasks_reveal must be a positive integer"
++                );
++            }
+         }
+         this->grid.load_from_path(map_path);
+         // std::cout << grid.agent_home_locs.size() <<", "<< grid.sortation_points.size() <<", "<< grid.end_points.size()<<std::endl;
+         if (grid.agent_home_locs.size() == 0){
+-            gen_random_instance(this->grid, this->agents, this->tasks, num_agents, num_tasks, seed);
++            gen_random_instance(
++                this->grid,
++                this->agents,
++                this->tasks,
++                num_agents,
++                num_tasks,
++                start_seed,
++                task_seed
++            );
+         }
+     }
+     
+@@ -195,6 +377,27 @@ period_on_sim::period_on_sim(py::kwargs kwargs){
+     ActionModelWithRotate* model = new ActionModelWithRotate(grid);
+     // model->set_logger(logger);
+ 
++    if (has_fixed_goal_tape && !gen_tasks){
++        throw std::invalid_argument(
++            "fixed_goal_tape requires gen_tasks=true and an explicit Kiva map"
++        );
++    }
++    if (has_absolute_task_tape && !gen_tasks){
++        throw std::invalid_argument(
++            "absolute_task_tape requires gen_tasks=true and a Kiva map"
++        );
++    }
++    if (has_fixed_goal_tape && grid.agent_home_locs.empty()){
++        throw std::invalid_argument(
++            "fixed_goal_tape is currently supported only for Kiva maps"
++        );
++    }
++    if (has_absolute_task_tape && grid.agent_home_locs.empty()){
++        throw std::invalid_argument(
++            "absolute_task_tape is currently supported only for Kiva maps"
++        );
++    }
++
+     if (grid.agent_home_locs.size() == 0){
+         if (task_assignment_strategy=="greedy"){
+             this->py_system_ptr = std::make_unique<TaskAssignSystem>(this->grid, this->planner, this->agents, this->tasks, model);
+@@ -207,8 +410,14 @@ period_on_sim::period_on_sim(py::kwargs kwargs){
+             }
+             this->py_system_ptr = std::make_unique<FixedAssignSystem>(this->grid, this->planner, this->agents, assigned_tasks, model);
+         } else if (task_assignment_strategy == "online_generate"){
+-            uint seed=kwargs["seed"].cast<uint>();
+-            this->py_system_ptr = std::make_unique<OnlineGenerateTaskSystem>(this->grid, this->planner, this->agents, model, seed);
++            this->py_system_ptr = std::make_unique<OnlineGenerateTaskSystem>(
++                this->grid,
++                this->planner,
++                this->agents,
++                model,
++                task_seed,
++                distribution_seed
++            );
+         } else{
+             std::cerr << "unknown task assignment strategy " << task_assignment_strategy << std::endl;
+             logger->log_fatal("unknown task assignment strategy " + task_assignment_strategy);
+@@ -216,14 +425,56 @@ period_on_sim::period_on_sim(py::kwargs kwargs){
+         }
+     } else {
+         int num_agents=kwargs["num_agents"].cast<int>();
+-        std::cout << "using kiva system (random task generation) with "<<num_agents<<" agents"<<std::endl;
++        std::cout << "using kiva system with " << num_agents << " agents"
++                  << (has_fixed_goal_tape
++                        ? " (fixed saturated goal tape)"
++                        : (has_absolute_task_tape
++                            ? " (absolute release task tape)"
++                            : " (online random task generation)"))
++                  << std::endl;
+         
+-        uint seed=kwargs["seed"].cast<uint>();
+-        this->py_system_ptr = std::make_unique<KivaSystem>(this->grid,this->planner,model,num_agents,seed);
++        auto kiva_system = std::make_unique<KivaSystem>(
++            this->grid,
++            this->planner,
++            model,
++            num_agents,
++            start_seed,
++            task_seed,
++            distribution_seed
++        );
++        if (has_fixed_goal_tape){
++            kiva_system->configure_fixed_goal_tape(
++                fixed_goal_tape_start_locations,
++                fixed_goal_tape,
++                fixed_goal_tape_manifest_sha256
++            );
++        }
++        if (has_absolute_task_tape){
++            kiva_system->configure_absolute_task_tape(
++                absolute_task_tape_start_locations,
++                absolute_task_tape,
++                absolute_task_tape_manifest_sha256
++            );
++        }
++        this->py_system_ptr = std::move(kiva_system);
+     }
+ 
++    this->py_system_ptr->set_seed_bundle(
++        episode_seed,
++        planner_priority_seed,
++        start_seed,
++        task_seed,
++        distribution_seed
++    );
++
+     if(kwargs.contains("task_dist_change_interval")){
+         int interval = kwargs["task_dist_change_interval"].cast<int>();
++        if ((has_fixed_goal_tape || has_absolute_task_tape) && interval > 0){
++            throw std::invalid_argument(
++                "task tapes must encode workload changes offline; "
++                "task_dist_change_interval must be non-positive"
++            );
++        }
+         this->py_system_ptr->task_dist_change_interval = interval;
+     }
+ 
+@@ -232,6 +483,16 @@ period_on_sim::period_on_sim(py::kwargs kwargs){
+         this->py_system_ptr->set_random_type(random_type);
+     }
+ 
++    if(kwargs.contains("initial_task_distribution_phase")){
++        int phase_index = kwargs["initial_task_distribution_phase"].cast<int>();
++        if ((has_fixed_goal_tape || has_absolute_task_tape) && phase_index != 0){
++            throw std::invalid_argument(
++                "initial_task_distribution_phase must be zero with a fixed goal tape"
++            );
++        }
++        this->py_system_ptr->initialize_task_distribution_phase(phase_index);
++    }
++
+     this->py_system_ptr->set_plan_time_limit(plan_time_limit);
+     this->py_system_ptr->set_preprocess_time_limit(INT_MAX);
+ 
+@@ -268,4 +529,4 @@ period_on_sim::period_on_sim(py::kwargs kwargs){
+     //     py_system_ptr->saveResults(save_path);
+     // }
+     // return result_json.dump(4);
+-}
+\ No newline at end of file
++}
+diff --git a/Guided-PIBT/guided-pibt/src/py_driver.cpp b/Guided-PIBT/guided-pibt/src/py_driver.cpp
+index 746a2bd..1cffb70 100644
+--- a/Guided-PIBT/guided-pibt/src/py_driver.cpp
++++ b/Guided-PIBT/guided-pibt/src/py_driver.cpp
+@@ -19,8 +19,10 @@ std::unique_ptr<BaseSystem> py_system_ptr;
+ 
+ // cpp simulator for on+GPIBT and off+GPIBT 
+ void gen_random_instance(Grid & grid, std::vector<int> & agents, std::vector<int> & tasks, 
+-    int num_agents, int num_tasks, uint seed) {
+-    std::mt19937 MT(seed);
++    int num_agents, int num_tasks, std::uint32_t start_seed,
++    std::uint32_t task_seed) {
++    std::mt19937 start_rng(start_seed);
++    std::mt19937 task_rng(task_seed);
+ 
+     std::vector<int> empty_locs;
+     for (int i=0;i<grid.map.size();++i) {
+@@ -29,7 +31,7 @@ void gen_random_instance(Grid & grid, std::vector<int> & agents, std::vector<int
+         }
+     }
+ 
+-    std::shuffle(empty_locs.begin(), empty_locs.end(), MT);
++    std::shuffle(empty_locs.begin(), empty_locs.end(), start_rng);
+ 
+     for (int i=0;i<num_agents;++i) {
+         agents.push_back(empty_locs[i]);
+@@ -40,19 +42,19 @@ void gen_random_instance(Grid & grid, std::vector<int> & agents, std::vector<int
+         std::cout<<"sample goal locations from end points"<<std::endl;
+         std::uniform_real_distribution<> dis(0.0, 1.0);
+         for (int i=0;i<num_tasks;++i) {
+-            double p = dis(MT);
++            double p = dis(task_rng);
+             if (p < 0.5){
+-                int rnd_idx=MT()%grid.end_points.size();
++                int rnd_idx=task_rng()%grid.end_points.size();
+                 tasks.push_back(grid.end_points[rnd_idx]);
+             } else {
+-                int rnd_idx=MT()%grid.sortation_points.size();
++                int rnd_idx=task_rng()%grid.sortation_points.size();
+                 tasks.push_back(grid.sortation_points[rnd_idx]);
+             }
+         }        
+     } else {
+         std::cout<<"sample goal locations from empty locations"<<std::endl;
+         for (int i=0;i<num_tasks;++i) {
+-            int rnd_idx=MT()%empty_locs.size();
++            int rnd_idx=task_rng()%empty_locs.size();
+             tasks.push_back(empty_locs[rnd_idx]);
+         }
+     }
+@@ -72,6 +74,19 @@ std::string run(const pybind11::kwargs& kwargs)
+     if (kwargs.contains("gen_tasks")){
+         gen_tasks = kwargs["gen_tasks"].cast<bool>();
+     }
++    std::uint32_t episode_seed = 0;
++    if (kwargs.contains("seed")){
++        episode_seed = kwargs["seed"].cast<std::uint32_t>();
++    } else if (gen_tasks){
++        std::cout << "kwargs must contain [seed]! " << std::endl;
++        exit(-1);
++    }
++    const std::uint32_t planner_priority_seed = dai_derive_seed(episode_seed, 0);
++    const std::uint32_t start_seed = dai_derive_seed(episode_seed, 1);
++    const std::uint32_t task_seed = dai_derive_seed(episode_seed, 2);
++    const std::uint32_t distribution_seed = dai_derive_seed(episode_seed, 3);
++    planner->set_seed(planner_priority_seed);
++
+     Grid grid;
+     std::string map_path;
+     std::vector<int> agents;
+@@ -120,7 +135,6 @@ std::string run(const pybind11::kwargs& kwargs)
+         }
+         map_path = kwargs["map_path"].cast<std::string>();
+         int num_agents, num_tasks;
+-        uint seed;
+         if (kwargs.contains("num_agents")){
+             num_agents = kwargs["num_agents"].cast<int>();
+         } else {
+@@ -133,12 +147,6 @@ std::string run(const pybind11::kwargs& kwargs)
+             std::cout << "kwargs must contain [num_tasks]! " << std::endl;
+             exit(-1);
+         }
+-        if (kwargs.contains("seed")){
+-            seed = kwargs["seed"].cast<uint>();
+-        } else {
+-            std::cout << "kwargs must contain [seed]! " << std::endl;
+-            exit(-1);
+-        }
+         if (kwargs.contains("task_assignment_strategy")){
+             task_assignment_strategy = kwargs["task_assignment_strategy"].cast<std::string>();
+         } else {
+@@ -151,7 +159,15 @@ std::string run(const pybind11::kwargs& kwargs)
+         grid.load_from_path(map_path);
+         // std::cout << grid.agent_home_locs.size() <<", "<< grid.sortation_points.size() <<", "<< grid.end_points.size()<<std::endl;
+         if (grid.agent_home_locs.size() == 0){
+-            gen_random_instance(grid, agents, tasks, num_agents, num_tasks, seed);
++            gen_random_instance(
++                grid,
++                agents,
++                tasks,
++                num_agents,
++                num_tasks,
++                start_seed,
++                task_seed
++            );
+         }
+     }
+     
+@@ -274,8 +290,14 @@ std::string run(const pybind11::kwargs& kwargs)
+             }
+             py_system_ptr = std::make_unique<FixedAssignSystem>(grid, planner, agents, assigned_tasks, model);
+         } else if (task_assignment_strategy == "online_generate"){
+-            uint seed=kwargs["seed"].cast<uint>();
+-            py_system_ptr = std::make_unique<OnlineGenerateTaskSystem>(grid, planner, agents, model, seed);
++            py_system_ptr = std::make_unique<OnlineGenerateTaskSystem>(
++                grid,
++                planner,
++                agents,
++                model,
++                task_seed,
++                distribution_seed
++            );
+         } else{
+             std::cerr << "unknown task assignment strategy " << task_assignment_strategy << std::endl;
+             logger->log_fatal("unknown task assignment strategy " + task_assignment_strategy);
+@@ -285,10 +307,25 @@ std::string run(const pybind11::kwargs& kwargs)
+         int num_agents=kwargs["num_agents"].cast<int>();
+         std::cout << "using kiva system (random task generation) with "<<num_agents<<" agents"<<std::endl;
+         
+-        uint seed=kwargs["seed"].cast<uint>();
+-        py_system_ptr = std::make_unique<KivaSystem>(grid,planner,model,num_agents,seed);
++        py_system_ptr = std::make_unique<KivaSystem>(
++            grid,
++            planner,
++            model,
++            num_agents,
++            start_seed,
++            task_seed,
++            distribution_seed
++        );
+     }
+ 
++    py_system_ptr->set_seed_bundle(
++        episode_seed,
++        planner_priority_seed,
++        start_seed,
++        task_seed,
++        distribution_seed
++    );
++
+     if(kwargs.contains("task_dist_change_interval")){
+         int interval = kwargs["task_dist_change_interval"].cast<int>();
+         py_system_ptr->task_dist_change_interval = interval;
+@@ -357,4 +394,4 @@ string playground(){
+ PYBIND11_MODULE(py_driver, m){
+     m.def("playground", &playground, "Playground function to test everything");
+     m.def("run", &run, "Function to run warehouse simulation");
+-}
+\ No newline at end of file
++}
+diff --git a/Guided-PIBT/guided-pibt/traffic_mapf/flow.hpp b/Guided-PIBT/guided-pibt/traffic_mapf/flow.hpp
+index 287b6d7..f25c7f9 100644
+--- a/Guided-PIBT/guided-pibt/traffic_mapf/flow.hpp
++++ b/Guided-PIBT/guided-pibt/traffic_mapf/flow.hpp
+@@ -56,4 +56,4 @@ int select_method(TrajLNS& lns);
+ void destory_improve(TrajLNS& lns, std::vector<int>& traffic,std::unordered_set<int>& updated, int max_ite, double time_limit, std::shared_ptr<Network> network_ptr);
+ 
+ }
+-#endif
+\ No newline at end of file
++#endif
+diff --git a/Guided-PIBT/guided-pibt/traffic_mapf/heap.h b/Guided-PIBT/guided-pibt/traffic_mapf/heap.h
+index 13b6d40..fb7bf51 100644
+--- a/Guided-PIBT/guided-pibt/traffic_mapf/heap.h
++++ b/Guided-PIBT/guided-pibt/traffic_mapf/heap.h
+@@ -37,7 +37,12 @@ class pqueue
+ 	public:
+         pqueue(Comparator* cmp, unsigned int size=1024)
+             : pqueue(size)
+-        { cmp_ = cmp; }
++        {
++            if (cmp != nullptr)
++            {
++                cmp_ = *cmp;
++            }
++        }
+ 
+ 		pqueue(unsigned int size=1024)
+             : maxsize_(size), minqueue_(QType().is_min_), queuesize_(0), 
+@@ -186,7 +191,10 @@ class pqueue
+ 		bool minqueue_;
+ 		unsigned int queuesize_;
+ 		s_node** elts_;
+-        Comparator* cmp_;
++        // Own a valid stateless comparator.  The original default
++        // constructor left a pointer uninitialised and then dereferenced it,
++        // which is undefined behaviour even when it happens to appear to work.
++        Comparator cmp_{};
+         uint32_t heap_ops_;
+ 
+ 		// reorders the subpqueue containing elts_[index]
+@@ -198,7 +206,7 @@ class pqueue
+             while(index > 0)
+             {
+                 unsigned int parent = (index-1) >> 1;
+-                if((*cmp_)(*elts_[index], *elts_[parent]))
++                if(cmp_(*elts_[index], *elts_[parent]))
+                 //if(*elts_[index] < *elts_[parent])
+                 {
+                     swap(parent, index);
+@@ -221,12 +229,12 @@ class pqueue
+                 unsigned int child2 = (index<<1)+2;
+                 unsigned int which = child1;
+                 if((child2 < queuesize_) && 
+-                    (*cmp_)(*elts_[child2], *elts_[child1])) 
++                    cmp_(*elts_[child2], *elts_[child1])) 
+                    //*elts_[child2] < *elts_[child1])
+                 { which = child2; }
+ 
+                 // swap child with parent if necessary
+-                if((*cmp_)(*elts_[which], *elts_[index]))
++                if(cmp_(*elts_[which], *elts_[index]))
+                 //if(*elts_[which] < *elts_[index])
+                 {
+                     swap(index, which);
+@@ -278,4 +286,4 @@ typedef pqueue<s_node,cmp_less_f, min_q> pqueue_min_f;
+ 
+ }
+ 
+-#endif
+\ No newline at end of file
++#endif
+diff --git a/Guided-PIBT/guided-pibt/traffic_mapf/pibt.cpp b/Guided-PIBT/guided-pibt/traffic_mapf/pibt.cpp
+index e2a67fa..b672ba1 100644
+--- a/Guided-PIBT/guided-pibt/traffic_mapf/pibt.cpp
++++ b/Guided-PIBT/guided-pibt/traffic_mapf/pibt.cpp
+@@ -222,7 +222,6 @@ bool causalPIBT(int curr_id, int higher_id,std::vector<State>& prev_states,
+ 	quickSort(successors,0, successors.size()-1, 
+ 		[&](State& a, State& b)
+ 		{
+-			int diff[4] = {1,lns.env->cols,-1,-lns.env->cols};
+ 			if (a.timestep == b.timestep){
+ #ifdef MAPFT
+ 					if (a.orientation==orien_next && b.orientation!=orien_next)
+@@ -230,7 +229,12 @@ bool causalPIBT(int curr_id, int higher_id,std::vector<State>& prev_states,
+ 					if (a.orientation!=orien_next && b.orientation==orien_next)
+ 						return false;
+ #endif
+-					return rand()%2==1;
++					// A comparator must not draw randomness: doing so violates
++					// strict weak ordering and makes the sort undefined.  Keep a
++					// reproducible total order for equal heuristic values.
++					if (a.location != b.location)
++						return a.location < b.location;
++					return a.orientation < b.orientation;
+ 
+ 			}
+ 			return a.timestep < b.timestep; 
+@@ -441,4 +445,4 @@ bool moveCheck(int id, std::vector<bool>& checked,
+ }
+ 
+ #endif
+-}
+\ No newline at end of file
++}
+diff --git a/Guided-PIBT/guided-pibt/traffic_mapf/search_node.h b/Guided-PIBT/guided-pibt/traffic_mapf/search_node.h
+index f984262..f229953 100644
+--- a/Guided-PIBT/guided-pibt/traffic_mapf/search_node.h
++++ b/Guided-PIBT/guided-pibt/traffic_mapf/search_node.h
+@@ -102,7 +102,7 @@ struct cmp_less_f
+ 
+         if (lhs.get_f() == rhs.get_f()){
+                 if (lhs.get_g() == rhs.get_g())
+-                    return rand() % 2;
++                    return lhs.id < rhs.id;
+                 else
+                     return lhs.get_g() > rhs.get_g();
+         }
+@@ -149,7 +149,7 @@ struct cmp_less_of
+                         return false;
+                 #endif
+                 if (lhs.get_g() == rhs.get_g())
+-                    return rand() % 2;
++                    return lhs.id < rhs.id;
+                 else
+                     return lhs.get_g() > rhs.get_g();
+             }
+@@ -179,7 +179,7 @@ struct cmp_less_jam
+             {
+                 if (lhs.get_all_vertex_flow() + lhs.get_g() == rhs.get_all_vertex_flow() + rhs.get_g()){
+                     if (lhs.get_g() == rhs.get_g())
+-                        return rand() % 2;
++                        return lhs.id < rhs.id;
+                     else
+                         return lhs.get_g() > rhs.get_g();
+ 
+@@ -196,4 +196,4 @@ struct cmp_less_jam
+ };
+ 
+ }
+-#endif
+\ No newline at end of file
++#endif

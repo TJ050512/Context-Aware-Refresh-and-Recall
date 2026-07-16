@@ -1,0 +1,190 @@
+{
+  "config": {
+    "agent_counts": [
+      24
+    ],
+    "budget_mode": "token_fraction_for_deterministic_smoke; wall-clock is logged but not fed back",
+    "decision_interval_steps": 5,
+    "guidance_scale": 5.0,
+    "horizon_steps": 250,
+    "maps": [
+      "two_corridor"
+    ],
+    "methods": [
+      "shortest",
+      "always_refresh",
+      "always_reuse",
+      "periodic_20",
+      "periodic_50",
+      "drift_25",
+      "drift_10",
+      "betg_25",
+      "betg_10"
+    ],
+    "primary_comparison": {
+      "baseline": "periodic_20",
+      "dynamic_workloads": [
+        "abrupt",
+        "recurring"
+      ],
+      "proposed": "betg_25"
+    },
+    "purpose": "mechanism smoke test only; not public-benchmark evidence",
+    "schema_version": "1",
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "workloads": [
+      "static",
+      "abrupt",
+      "recurring"
+    ]
+  },
+  "disclaimer": "Local transactional smoke simulator only; not public benchmark or SOTA evidence.",
+  "interpretation": "BORDERLINE: expand locked smoke seeds once without changing parameters, then decide whether official-backbone integration is worth the cost.",
+  "n_decision_records": 3600,
+  "n_runs": 81,
+  "overall_methods": {
+    "always_refresh": {
+      "budget_violation_rate": 0.0,
+      "refresh_rate_mean": 1.0,
+      "refresh_seconds_mean": 0.11368136044444443,
+      "throughput_mean": 0.5822222222222222,
+      "wait_rate_mean": 0.0735925925925926,
+      "wall_time_seconds_mean": 0.154036486
+    },
+    "always_reuse": {
+      "budget_violation_rate": 0.0,
+      "refresh_rate_mean": 0.02,
+      "refresh_seconds_mean": 0.0025746897777777777,
+      "throughput_mean": 0.2497777777777778,
+      "wait_rate_mean": 0.18144444444444444,
+      "wall_time_seconds_mean": 0.030355213
+    },
+    "betg_10": {
+      "budget_violation_rate": 0.0,
+      "refresh_rate_mean": 0.1,
+      "refresh_seconds_mean": 0.011508333666666667,
+      "throughput_mean": 0.35644444444444445,
+      "wait_rate_mean": 0.14420370370370372,
+      "wall_time_seconds_mean": 0.04857792144444444
+    },
+    "betg_25": {
+      "budget_violation_rate": 0.0,
+      "refresh_rate_mean": 0.25555555555555554,
+      "refresh_seconds_mean": 0.028549707666666663,
+      "throughput_mean": 0.3804444444444444,
+      "wait_rate_mean": 0.10085185185185185,
+      "wall_time_seconds_mean": 0.06621981955555556
+    },
+    "drift_10": {
+      "budget_violation_rate": 0.0,
+      "refresh_rate_mean": 0.09777777777777778,
+      "refresh_seconds_mean": 0.011545763555555555,
+      "throughput_mean": 0.28044444444444444,
+      "wait_rate_mean": 0.15414814814814815,
+      "wall_time_seconds_mean": 0.04154243988888889
+    },
+    "drift_25": {
+      "budget_violation_rate": 0.0,
+      "refresh_rate_mean": 0.2488888888888889,
+      "refresh_seconds_mean": 0.02800799977777778,
+      "throughput_mean": 0.39244444444444443,
+      "wait_rate_mean": 0.11296296296296296,
+      "wall_time_seconds_mean": 0.06193576366666667
+    },
+    "periodic_20": {
+      "budget_violation_rate": 0.0,
+      "refresh_rate_mean": 0.26,
+      "refresh_seconds_mean": 0.029417769222222223,
+      "throughput_mean": 0.34400000000000003,
+      "wait_rate_mean": 0.09533333333333333,
+      "wall_time_seconds_mean": 0.06257540744444444
+    },
+    "periodic_50": {
+      "budget_violation_rate": 0.0,
+      "refresh_rate_mean": 0.1,
+      "refresh_seconds_mean": 0.011289092111111112,
+      "throughput_mean": 0.35511111111111116,
+      "wait_rate_mean": 0.1437962962962963,
+      "wall_time_seconds_mean": 0.04386427311111111
+    },
+    "shortest": {
+      "budget_violation_rate": 0.0,
+      "refresh_rate_mean": 0.0,
+      "refresh_seconds_mean": 0.0,
+      "throughput_mean": 0.2497777777777778,
+      "wait_rate_mean": 0.18144444444444444,
+      "wall_time_seconds_mean": 0.019982259222222222
+    }
+  },
+  "primary_paired_analysis": {
+    "baseline": "periodic_20",
+    "condition_effects": [
+      {
+        "absolute_throughput_gain": 0.01200000000000001,
+        "layout_seed": 101,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.03333333333333337,
+        "workload": "abrupt"
+      },
+      {
+        "absolute_throughput_gain": 0.0,
+        "layout_seed": 102,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.0,
+        "workload": "abrupt"
+      },
+      {
+        "absolute_throughput_gain": 0.04799999999999999,
+        "layout_seed": 103,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.1558441558441558,
+        "workload": "abrupt"
+      },
+      {
+        "absolute_throughput_gain": 0.07599999999999996,
+        "layout_seed": 101,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.22891566265060226,
+        "workload": "recurring"
+      },
+      {
+        "absolute_throughput_gain": 0.0,
+        "layout_seed": 102,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": 0.0,
+        "workload": "recurring"
+      },
+      {
+        "absolute_throughput_gain": -0.020000000000000018,
+        "layout_seed": 103,
+        "map_id": "two_corridor",
+        "n_agents": 24,
+        "relative_throughput_gain": -0.058823529411764754,
+        "workload": "recurring"
+      }
+    ],
+    "mean_relative_throughput_gain": 0.05987827040272112,
+    "median_relative_throughput_gain": 0.04851031321619553,
+    "n_paired_seeds": 3,
+    "paired_bootstrap_ci95": [
+      0.0,
+      0.13112449799196782
+    ],
+    "per_seed_effects": [
+      0.13112449799196782,
+      0.0,
+      0.04851031321619553
+    ],
+    "proposed": "betg_25",
+    "sign_flip_pvalue": 0.5
+  }
+}

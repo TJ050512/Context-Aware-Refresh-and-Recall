@@ -1,0 +1,54 @@
+{
+  "schema": "dai.same-call-implementation-freeze/v1",
+  "status": "frozen_before_engineering_smoke",
+  "created_date": "2026-07-14",
+  "historical_sources_remain_byte_identical": {
+    "src/dai_lmapf/claim_runner.py": "d9bf61bfa2f86881084b2b1abc19aa0f7483206fa58dcdc88c0b086099d03c2e",
+    "scripts/run_claim_aware_budgeted_validation.py": "694c6af03421e653b7d273d6e5f9da3dd6d1ec349f9120b8efe06bf466b33d50"
+  },
+  "same_call_sources": {
+    "src/dai_lmapf/same_call_claim_runner.py": "53fe48d7fda7638dbd79423d01f4f07de5e13a04938d9a1516855347413ef495",
+    "scripts/run_same_call_confirmation_v1.py": "9eb203c1caf31f81409787a699a88ebc025071977192ec95b25390b5cc2b5538",
+    "src/dai_lmapf/publication_policy.py": "d860af7cc664ff30eaed6bad099313c27f74e99e933f95503d668d57b0ec6d88",
+    "src/dai_lmapf/frozen_cnn_generator.py": "023126dd8ce34e8a65ae011f8a7dbb0cca754220b62920db812237de0285b7f2",
+    "src/dai_lmapf/online_ggo_adapter.py": "013cae2734aa67782ae560e55eeb9b51c9be7343ab27e6ef2e3836ffcc1e913b",
+    "external/OnlineGGO/CMAES/env_search/iterative_update/envs/trafficflow_online_env.py": "178d954b17f1bf33a1772fd481adb66709de221957dc41ae9c592e591ecfa5a4",
+    "external/OnlineGGO/CMAES/env_search/utils/task_generator.py": "ae37b0c02bca7815af3d8e491507281ed92d85fa7ed91ec7ebe3ca44c889dbf5",
+    "EXPERIMENT_PROTOCOL_SAME_CALL_2026-07-14.md": "9e3740d240525100183eb54ddbfd81e475e8f9680002ed34a2255568ea878a41"
+  },
+  "remote_binary_and_data_identities": {
+    "checkpoint_file_sha256": "e4d918075c9ea0e5be795572c16c64a843da2780294a407a190b989298008c8d",
+    "checkpoint_params_sha256": "6f95c14a6afad6484a525f68e9809cf7c8a86fe48878a3d80abea67dd94abbac",
+    "period_on_sim_sha256": "9e4b54722d67598f13f1bc2d4d0fb4121a94f79962923c184c1d269225e8c1a5",
+    "narrow_map_sha256": "866e664553959fb44af359276885e2e72192eaf36fd0f4abde3726474703cbb6",
+    "regular_map_sha256": "0e597b0c8ec25414d96bf2080ff5a60bbd3bb8f33f3622965807b7746f8a27dd"
+  },
+  "thread_contract": {
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1",
+    "torch_num_threads": 1,
+    "torch_num_interop_threads": 1
+  },
+  "engineering_smoke": {
+    "evidence_class": "engineering_only_no_effect_inference",
+    "root_seed": 17,
+    "methods": [
+      "bootstrap_only",
+      "exact_even_G4",
+      "exact_even_G5",
+      "random_G5",
+      "js_cap_G5",
+      "context_no_reactivation_B25",
+      "context_memory_B25",
+      "exact_even_B25"
+    ],
+    "scenarios": 4,
+    "workloads": 3,
+    "total_runs": 96,
+    "fresh_process_per_arm": true,
+    "append_only_attempt_ledger": true
+  }
+}

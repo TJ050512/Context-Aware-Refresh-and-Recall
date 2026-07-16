@@ -1,0 +1,171 @@
+protocol_version: "0.1"
+status: "current cohort-versioning direction; pending official OnlineGGO Linux feasibility gate"
+
+problem:
+  family: "lifelong MAPF"
+  contribution_scope: "event-triggered publication timing with route-build cohort diagnostics for online traffic guidance"
+  task_assignment: "fixed and shared across methods"
+  primary_objective: "maximize completed tasks per timestep under a common planning-time budget"
+  broad_sota_claim_allowed: false
+
+reproducibility:
+  deterministic: true
+  paired_scenario_manifests: true
+  independent_seeds:
+    - layout_seed
+    - start_seed
+    - task_seed
+    - arrival_seed
+    - policy_seed
+  log_every_decision_window: true
+  assert_vertex_collisions: true
+  assert_edge_swaps: true
+  reject_zero_distance_tasks: true
+
+pilot:
+  horizon_steps: 1200
+  decision_window_steps: 20
+  phase_length_steps: 300
+  development_seeds: 10
+  test_seeds: 30
+  planning_budget_seconds_per_step: 1.0
+  phases:
+    - id: low_uniform
+      active_density: low
+      goal_distribution: uniform
+      topology_event: none
+    - id: high_top_hotspot
+      active_density: high
+      goal_distribution: top_gaussian
+      topology_event: none
+    - id: high_bottom_hotspot
+      active_density: high
+      goal_distribution: bottom_gaussian
+      topology_event: close_one_corridor
+    - id: medium_recovery
+      active_density: medium
+      goal_distribution: uniform
+      topology_event: reopen_corridor
+
+maps:
+  smoke_only:
+    - coursework_two_corridor
+  direct_comparison:
+    - warehouse-33-57
+    - sortation-33-57
+    - empty-32-32
+    - random-32-32
+  external_generalization:
+    - warehouse-10-20-10-2-1
+    - maze-32-32-4
+    - room-64-64-16
+
+guidance_refresh:
+  frozen_generator: "Online GGO on+PIBT first; a second backbone is required for a planner-agnostic claim"
+  decisions: [reuse_current_version, publish_new_version]
+  periodic_baseline_intervals: [10, 20, 50, 100, 200]
+  record_real_wall_clock_cost: true
+  note: "A publication governs guide paths constructed after installation; existing paths retain their build version in the primary GUIDANCE_LNS=OFF configuration. Reuse still advances the official simulator."
+
+cohort_attribution:
+  route_key: [agent_id, task_id, route_build_timestep, rebuild_index]
+  treatment: "normalized RDLU guidance version actually used to construct the guide path"
+  outcomes: [route_exposure_steps, task_service_time, waiting_time, completion, right_censored]
+  minimum_mature_completions_before_feedback: 50
+  deduplicate_overlapping_event_windows: true
+  causal_role: "controller feedback and diagnostic only; paired episode manifests are the causal experimental unit"
+
+context_features:
+  - active_agent_density
+  - recent_throughput
+  - wait_ratio
+  - conflict_or_backtrack_rate
+  - maximum_to_mean_edge_load
+  - edge_load_entropy
+  - opposite_direction_flow
+  - goal_hotspot_entropy
+  - cross_region_demand_ratio
+  - previous_action
+  - guidance_age
+  - goal_distribution_js_divergence_since_refresh
+  - edge_usage_distribution_drift_since_refresh
+  - throughput_ewma_drop
+  - last_refresh_wall_clock_cost
+  - recent_planning_time
+
+methods:
+  internal_controls:
+    - shortest_no_guidance
+    - legacy_each_fixed_congestion_scale
+    - legacy_validation_selected_global_fixed
+    - density_lookup_coursework
+    - always_reuse
+    - always_refresh
+    - fixed_period_10_20_50_100_200
+    - wait_rate_threshold
+    - goal_distribution_change_threshold
+    - hindsight_refresh_oracle
+  proposed_method:
+    - cohort_aware_event_triggered_guidance_versioning
+  ablations:
+    - no_sliding_window
+    - no_cohort_attribution
+    - no_hysteresis
+    - no_change_features
+  external_lmapf:
+    - pibt2
+    - rhcr_pbs
+    - wppl_or_epibt
+    - traffic_flow_optimisation_or_gpibt
+    - online_ggo
+    - rl_rh_pp
+  optional_not_main_table:
+    - lacam
+    - eecbs
+    - mapf_lns2
+    - steam
+
+metrics:
+  primary:
+    - throughput
+    - dynamic_regret_to_phase_oracle
+    - recovery_time_after_shift
+    - planning_budget_violation_rate
+    - publication_count
+    - generator_wall_clock_seconds
+    - cohort_service_time
+  secondary:
+    - task_service_time_mean
+    - task_service_time_p95
+    - task_service_time_p99
+    - wait_ratio_per_agent_timestep
+    - path_stretch
+    - deadlock_rate
+    - jain_fairness
+    - planning_time_p50
+    - planning_time_p95
+    - planning_time_p99
+    - action_switch_count
+    - meta_controller_wall_clock_seconds
+  safety:
+    - vertex_collisions
+    - edge_swap_collisions
+
+statistics:
+  experimental_unit: "scenario manifest"
+  paired_across_methods: true
+  confidence_interval: "paired bootstrap, 10000 resamples"
+  hypothesis_test: "paired permutation or Wilcoxon, chosen before test-set access"
+  multiplicity: "Holm correction within each research question"
+  report_effect_sizes: true
+  report_all_seeds: true
+
+gates:
+  correctness:
+    invariant_violations_allowed: 0
+  internal_value:
+    requirement: "at equal publication count, beat best fixed period by >=5%; or lose <=1% throughput while reducing publications >=40% with a measured generator or communication cost"
+  paper_value:
+    requirement: "on >=3 public maps, improve the throughput-runtime Pareto frontier of the same frozen guidance generator; static degradation <=2%"
+  sota_wording:
+    requirement: "30 paired seeds, second guidance backbone, budget violations <=5%, controller overhead <5%, and best result on a locked non-stationary equal-budget protocol"

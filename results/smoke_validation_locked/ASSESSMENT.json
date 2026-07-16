@@ -1,0 +1,216 @@
+{
+  "all_checks_pass": false,
+  "all_method_deadlock_rate": 0.00360082304526749,
+  "budget_violation_rate": 0.0,
+  "checks": {
+    "at_least_20pct_faster_than_always_refresh": true,
+    "at_least_95pct_always_refresh_throughput": false,
+    "beats_simple_drift_trigger_significantly": false,
+    "budget_violation_at_most_5pct": true,
+    "controller_overhead_below_5pct": true,
+    "n16_degradation_within_2pct": true,
+    "open_degradation_within_2pct": true,
+    "primary_ci_excludes_zero": true,
+    "primary_gain_at_least_5pct": true,
+    "refresh_rate_at_most_25pct": true,
+    "static_degradation_within_2pct": true,
+    "three_corridor_direction_positive": true,
+    "zero_collisions": true,
+    "zero_proposed_deadlocks": true
+  },
+  "collision_count": 0,
+  "controller_overhead_fraction": 0.0314315928606432,
+  "low_budget": {
+    "baseline": "periodic_50",
+    "mean_absolute_gain": -0.0006250000000000006,
+    "mean_relative_gain": 0.0006437180587245831,
+    "median_relative_gain": 0.001461136908882786,
+    "n_seeds": 12,
+    "per_seed_relative_gain": [
+      0.002922273817765572,
+      0.023026315789473666,
+      0.06443648096152899,
+      0.00825471698113207,
+      0.054075060167707426,
+      0.06755970606246173,
+      -0.07478473257161777,
+      -0.016527760071392117,
+      0.0,
+      0.0,
+      -0.0032700722983257224,
+      -0.11796737213403884
+    ],
+    "proposed": "betg_10",
+    "relative_ci95": [
+      -0.03011307045151847,
+      0.027552054836350124
+    ],
+    "sign_flip_pvalue": 0.958984375
+  },
+  "main_refresh_rate": 0.2456597222222222,
+  "n16_control": {
+    "baseline": "periodic_20",
+    "mean_absolute_gain": 0.0028395061728395065,
+    "mean_relative_gain": 0.004042304518860801,
+    "median_relative_gain": 0.0017792514683868917,
+    "n_seeds": 12,
+    "per_seed_relative_gain": [
+      0.0024900064816213373,
+      0.001068496455152446,
+      -0.004500372957889591,
+      0.006721432855270084,
+      -0.009385992997214456,
+      0.023931594132398964,
+      -0.0005613990025167551,
+      0.02994674485693397,
+      0.010063358889349236,
+      0.00737084462651694,
+      -0.01175877792738834,
+      -0.006878281185904233
+    ],
+    "proposed": "betg_25",
+    "relative_ci95": [
+      -0.0023951999222140844,
+      0.011309080679580896
+    ],
+    "sign_flip_pvalue": 0.3134765625
+  },
+  "open_control": {
+    "baseline": "periodic_20",
+    "mean_absolute_gain": 0.022361111111111096,
+    "mean_relative_gain": 0.021290835910633975,
+    "median_relative_gain": 0.017408772778539913,
+    "n_seeds": 12,
+    "per_seed_relative_gain": [
+      0.024968322186877178,
+      0.011584940660179075,
+      0.007654322779845396,
+      0.013618307298416446,
+      0.005199534456713454,
+      0.006707361379627431,
+      0.021418348803231766,
+      0.05913966110121871,
+      0.011346103177695162,
+      0.04231763573747633,
+      0.03033625508766334,
+      0.021199238258663378
+    ],
+    "proposed": "betg_25",
+    "relative_ci95": [
+      0.01351144914679775,
+      0.030766805720419076
+    ],
+    "sign_flip_pvalue": 0.00048828125
+  },
+  "primary": {
+    "baseline": "periodic_20",
+    "mean_absolute_gain": 0.018993055555555558,
+    "mean_relative_gain": 0.06345069603118199,
+    "median_relative_gain": 0.04798996698269074,
+    "n_seeds": 12,
+    "per_seed_relative_gain": [
+      0.16794016589668784,
+      0.055621707762868094,
+      0.2214934818980256,
+      0.021670882046021373,
+      0.09390440363716437,
+      0.04035822620251339,
+      -0.02656677733123647,
+      0.039417534417534414,
+      0.07975554642956528,
+      -0.0009413561055148199,
+      0.06933692246614731,
+      -0.0005823849455924698
+    ],
+    "proposed": "betg_25",
+    "relative_ci95": [
+      0.027447980936575706,
+      0.104256963825897
+    ],
+    "sign_flip_pvalue": 0.005859375
+  },
+  "proposed_deadlock_rate": 0.0,
+  "runtime_fraction_of_always_refresh": 0.44169937808850385,
+  "static_control": {
+    "baseline": "periodic_20",
+    "mean_absolute_gain": 0.010555555555555549,
+    "mean_relative_gain": 0.017281930918431814,
+    "median_relative_gain": 0.01685514584774346,
+    "n_seeds": 12,
+    "per_seed_relative_gain": [
+      -0.02579258373175167,
+      0.02512146239739908,
+      -0.0030611763008993637,
+      0.0589127539444586,
+      0.021695079124277386,
+      -0.005577383709059782,
+      -0.0317422411256587,
+      0.024160474397177067,
+      0.049024618870397545,
+      0.012015212571209535,
+      0.07907622907788016,
+      0.003550725505751945
+    ],
+    "proposed": "betg_25",
+    "relative_ci95": [
+      -0.0001969938982081625,
+      0.035880823389838744
+    ],
+    "sign_flip_pvalue": 0.103515625
+  },
+  "three_corridor": {
+    "baseline": "periodic_20",
+    "mean_absolute_gain": 0.005277777777777773,
+    "mean_relative_gain": 0.013401216116343302,
+    "median_relative_gain": -0.003154574132492134,
+    "n_seeds": 12,
+    "per_seed_relative_gain": [
+      0.10539964271307556,
+      -0.023465703971119134,
+      0.11567895726010355,
+      -0.02264808362369338,
+      0.08409873708381169,
+      0.0,
+      0.0,
+      0.04910533910533913,
+      -0.06348595102777921,
+      -0.04198966408268743,
+      -0.006309148264984268,
+      -0.0355695317959469
+    ],
+    "proposed": "betg_25",
+    "relative_ci95": [
+      -0.017255053149665873,
+      0.04725981020573855
+    ],
+    "sign_flip_pvalue": 0.455078125
+  },
+  "throughput_fraction_of_always_refresh": 0.6586423606499088,
+  "versus_drift_heuristic": {
+    "baseline": "drift_25",
+    "mean_absolute_gain": 0.003437500000000001,
+    "mean_relative_gain": 0.011446230751562259,
+    "median_relative_gain": 0.01089009899680941,
+    "n_seeds": 12,
+    "per_seed_relative_gain": [
+      0.12936298804980753,
+      -0.09805246172153512,
+      0.12127818659778614,
+      0.005930384330865549,
+      -0.042640869358542284,
+      0.037913081568868655,
+      0.027427646610814985,
+      0.006047419773706569,
+      0.01573277821991225,
+      -0.03461459190699827,
+      0.09087415644202636,
+      -0.12190394958796526
+    ],
+    "proposed": "betg_25",
+    "relative_ci95": [
+      -0.030956165694752583,
+      0.054746874065258695
+    ],
+    "sign_flip_pvalue": 0.61279296875
+  }
+}

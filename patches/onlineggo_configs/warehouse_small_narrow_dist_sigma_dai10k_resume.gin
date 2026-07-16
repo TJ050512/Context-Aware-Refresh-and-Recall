@@ -1,0 +1,12 @@
+include "config/traffic_mapf/period_online/warehouse_small_narrow_dist_sigma_dai2k.gin"
+
+# Stage 1 continuation of the hash-locked 2k feasibility run.  Keep the
+# one-rollout objective unchanged so the serialized CMA-ES state remains
+# comparable.  Checkpoint selection is performed on paired development tapes,
+# not from this noisy single-rollout training objective alone.
+experiment.name = "trafficMAPF wnarrow periodical on DAI staged CMA"
+
+Manager.max_evals = 10000
+Manager.archive_save_freq = -1
+Manager.reload_save_freq = 1
+TrafficMAPFManager.n_evals = 1

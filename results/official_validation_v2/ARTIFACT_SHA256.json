@@ -1,0 +1,21 @@
+{
+  "schema": "dai.validation-v2-artifact-manifest/v1",
+  "status": "complete_and_structurally_audited",
+  "total_runs": 1560,
+  "master_completion_marker": "VALIDATION_V2_MATRIX_COMPLETE",
+  "artifacts": {
+    "narrow_r020.json": "4aa23337e6dc2177437e8459f254fe9b408c25f96024611190d4897cb41ec500",
+    "narrow_r035.json": "5ee5fe76b0119633063bb8b81975b603918214f455e3fa0b05a318b8de78f7d2",
+    "regular_r020.json": "ce3d4f88319b9e6f12f7d24e0169e498f7c7508306be5cac2d1dfbb2a4f64655",
+    "regular_r035.json": "8976738b7f7fd55a07ead602df167131824b33e304cfe8a194df2545c4a049cb"
+  },
+  "analysis": {
+    "combined_validation_v2_analysis.json": "f203327ce406f431fe9384da487a05cf388554d47dd6e798068bf0cf7702093e",
+    "combined_validation_v2_analysis.md": "81d646bd19eea6452bb94f30a20476aa7becef60d7552b7a7abded855bc3ee33",
+    "recommendation": "NO_GO_RETURN_TO_DEVELOPMENT"
+  },
+  "transport_bundle": {
+    "filename": "validation_v2_complete_bundle.tgz",
+    "sha256": "fd5feafc394780c126aef536776d422862fd6c5cd1284d77eb4d928d37ec402e"
+  }
+}

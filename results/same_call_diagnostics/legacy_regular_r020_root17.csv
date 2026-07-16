@@ -1,0 +1,16 @@
+method,seed,map_id,workload,num_task_finished,throughput_per_timestep,mandatory_bootstrap_calls,post_bootstrap_publication_count,publication_budget,budget_violation_count,generator_seconds,simulator_seconds,elapsed_seconds
+bootstrap_only,17,warehouse_small_kiva,abrupt,4616,2.308,1,0,0,0,0.001852804,6.775647431,8.578363358974457
+context_dualcap_G4S5,17,warehouse_small_kiva,abrupt,4624,2.312,1,5,5,0,0.009131626,6.373639056000001,8.62877568975091
+context_eventreserve_G5S6,17,warehouse_small_kiva,abrupt,4656,2.328,1,5,6,0,0.01090597,6.363189856999998,8.699232816696167
+context_memory_B25,17,warehouse_small_kiva,abrupt,4644,2.322,1,8,25,0,0.016951484,6.3068501459999995,11.28344340622425
+exact_even_B25,17,warehouse_small_kiva,abrupt,4652,2.326,1,25,25,0,0.049244464000000016,6.606853591000002,9.089765585958958
+bootstrap_only,17,warehouse_small_kiva,recurrent,4432,2.216,1,0,0,0,0.001844328,6.308010717999999,8.107539288699627
+context_dualcap_G4S5,17,warehouse_small_kiva,recurrent,4555,2.2775,1,5,5,0,0.011051228,6.4660329920000015,11.479471206665039
+context_eventreserve_G5S6,17,warehouse_small_kiva,recurrent,4602,2.301,1,6,6,0,0.010734569,6.388865346000002,8.668191265314817
+context_memory_B25,17,warehouse_small_kiva,recurrent,4584,2.292,1,7,25,0,0.012492642000000002,6.259076386000001,8.592521663755178
+exact_even_B25,17,warehouse_small_kiva,recurrent,4612,2.306,1,25,25,0,0.045889635,6.326543726,8.845381800085306
+bootstrap_only,17,warehouse_small_kiva,stationary,4369,2.1845,1,0,0,0,0.002602523,6.294199265999998,10.461504183709621
+context_dualcap_G4S5,17,warehouse_small_kiva,stationary,4578,2.289,1,5,5,0,0.008715899999999999,6.359462615999998,8.559502080082893
+context_eventreserve_G5S6,17,warehouse_small_kiva,stationary,4586,2.293,1,6,6,0,0.010474041,6.514106075000003,8.657503727823496
+context_memory_B25,17,warehouse_small_kiva,stationary,4619,2.3095,1,7,25,0,0.014398196,6.374561048,8.597393594682217
+exact_even_B25,17,warehouse_small_kiva,stationary,4299,2.1495,1,25,25,0,0.046422161,6.185773112999998,8.892440758645535

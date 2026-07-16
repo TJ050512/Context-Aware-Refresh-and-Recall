@@ -1,0 +1,50 @@
+{
+  "schema": "dai.same-call-a1-effect-blind-execution-failure/v1",
+  "created_at": "2026-07-14T19:11:34+08:00",
+  "claim_boundary": "Execution metadata only. No outcome, treatment effect, rank, confidence interval, or p-value was read or computed.",
+  "status": "a1_matrix_abandoned_before_effect_analysis",
+  "reason": "The frozen A1 launcher required globally unique bare Linux PIDs. One PID was legitimately recycled for two distinct process instances. This implementation condition is stronger than the protocol's fresh-process-per-arm requirement.",
+  "a1_protocol_sha256": "10f17682a9dc32f33fad2c77289e8c9dff659325de655b584f1d138066f05fdf",
+  "a1_config_sha256": "272a98ebf7feefd2cf3300fefc20c789e8893bf23c05ba898741a4ec89eba004",
+  "driver_log_sha256": "5f7490f0531c6a36a5e690106d888a530be64f5c35b27cf6fba5757fdfa9edf2",
+  "audit": {
+    "runs": 960,
+    "unique_bare_pids": 959,
+    "unique_process_instances_host_pid_start_ns": 960,
+    "unique_run_uuids": 960,
+    "append_only_ledger_bindings_passed": true,
+    "duplicate_bare_pid_groups": [
+      {
+        "pid": 108072,
+        "instances": [
+          {
+            "host": "autodl-container-a2fd40a1b8-8788bcc3",
+            "scenario": "narrow_r020",
+            "start_ns": 1784026448554553718,
+            "uuid": "3badad86-e42b-4577-bbae-f834a3f44a24"
+          },
+          {
+            "host": "autodl-container-a2fd40a1b8-8788bcc3",
+            "scenario": "regular_r035",
+            "start_ns": 1784026739464857268,
+            "uuid": "9f45d34c-1d41-48e2-939c-b27d41623292"
+          }
+        ]
+      }
+    ]
+  },
+  "sealed_files": [
+    {"path": "results/same_call_confirmation_a1/narrow_r020.json", "sha256": "3803d94367152d9976fbb1ac3789c33b17a4f650731dfb0f131c6c9ac39bf42d", "size_bytes": 98417621},
+    {"path": "results/same_call_confirmation_a1/narrow_r020.csv", "sha256": "6164a3d88066ea3ef9660fd08030caf081b9af5eb5b8ccb2cac515869d610f63", "size_bytes": 31849},
+    {"path": "results/same_call_confirmation_a1/narrow_r020.attempts.jsonl", "sha256": "0568890bf93b042f1d6f4663dad1dda49359bca3d641f174887801d5cfa303b2", "size_bytes": 272589},
+    {"path": "results/same_call_confirmation_a1/narrow_r035.json", "sha256": "ecf47df5eb8d2cc00b17a4a3a34cf6b176b961e35cd86282e50abc90162eb821", "size_bytes": 101193080},
+    {"path": "results/same_call_confirmation_a1/narrow_r035.csv", "sha256": "b2cde92a2cefb0fb8aec0da622e216cb5fa5c07532b4c64cfd2ad9740b29630f", "size_bytes": 31866},
+    {"path": "results/same_call_confirmation_a1/narrow_r035.attempts.jsonl", "sha256": "eb1c2e6d9afa50118f24c4792bd4bf4164ad356af8e96592b6090efb28ef0df1", "size_bytes": 272592},
+    {"path": "results/same_call_confirmation_a1/regular_r020.json", "sha256": "9f3ccd02660ebc85aaf5aa74681a0fc156893ded2f336bd0f831ce6bec206c89", "size_bytes": 98993048},
+    {"path": "results/same_call_confirmation_a1/regular_r020.csv", "sha256": "3181067857397f9140a615cd718359311c2ebb507058490502f09b43a01f76d6", "size_bytes": 30199},
+    {"path": "results/same_call_confirmation_a1/regular_r020.attempts.jsonl", "sha256": "44ec7f21f440c1de0db16d42e39d36c82ccf2ed1779b270b97fb18cade900443", "size_bytes": 269231},
+    {"path": "results/same_call_confirmation_a1/regular_r035.json", "sha256": "2f749ea77954ab81fd6189116dea87d4591d2fd65af7129b6e476bb8b7dee08b", "size_bytes": 102401762},
+    {"path": "results/same_call_confirmation_a1/regular_r035.csv", "sha256": "7889c519630d9c6cff867694c3fee7d371e2cb5f05930d98291b337ba14ccdb8", "size_bytes": 29960},
+    {"path": "results/same_call_confirmation_a1/regular_r035.attempts.jsonl", "sha256": "d8a8b0cc35ec6c1bc643f90e21bc7c809f7016ac98fc516ed0048b9d4234cdbd", "size_bytes": 269236}
+  ]
+}

@@ -1,0 +1,16 @@
+method,seed,map_id,workload,num_task_finished,throughput_per_timestep,mandatory_bootstrap_calls,post_bootstrap_publication_count,publication_budget,budget_violation_count,generator_seconds,simulator_seconds,elapsed_seconds
+bootstrap_only,17,warehouse_small_narrow_kiva,abrupt,3476,1.738,1,0,0,0,0.002098166,4.9328906770000005,6.617304924875498
+context_dualcap_G4S5,17,warehouse_small_narrow_kiva,abrupt,3526,1.763,1,5,5,0,0.009147839,5.025798828000001,7.161737151443958
+context_eventreserve_G5S6,17,warehouse_small_narrow_kiva,abrupt,3765,1.8825,1,5,6,0,0.011291867,5.012268375,7.213540248572826
+context_memory_B25,17,warehouse_small_narrow_kiva,abrupt,3817,1.9085,1,8,25,0,0.019040158,4.953943605,10.938523150980473
+exact_even_B25,17,warehouse_small_narrow_kiva,abrupt,3912,1.956,1,25,25,0,0.05022170699999999,5.272324153000001,7.789282411336899
+bootstrap_only,17,warehouse_small_narrow_kiva,recurrent,3646,1.823,1,0,0,0,0.00208321,5.147046159000001,6.818609643727541
+context_dualcap_G4S5,17,warehouse_small_narrow_kiva,recurrent,3650,1.825,1,5,5,0,0.009560119,4.990569557,10.872169375419617
+context_eventreserve_G5S6,17,warehouse_small_narrow_kiva,recurrent,3839,1.9195,1,6,6,0,0.01066909,5.148256337000003,7.162927553057671
+context_memory_B25,17,warehouse_small_narrow_kiva,recurrent,3897,1.9485,1,12,25,0,0.009465848,5.121947029,7.123399473726749
+exact_even_B25,17,warehouse_small_narrow_kiva,recurrent,3871,1.9355,1,25,25,0,0.050196734,5.118636093,7.581774905323982
+bootstrap_only,17,warehouse_small_narrow_kiva,stationary,3851,1.9255,1,0,0,0,0.003061167,4.980717645000004,9.495826747268438
+context_dualcap_G4S5,17,warehouse_small_narrow_kiva,stationary,3815,1.9075,1,5,5,0,0.005436005,4.9994535099999995,6.955929681658745
+context_eventreserve_G5S6,17,warehouse_small_narrow_kiva,stationary,3691,1.8455,1,6,6,0,0.007666849,5.049302753999999,7.076997764408588
+context_memory_B25,17,warehouse_small_narrow_kiva,stationary,3830,1.915,1,9,25,0,0.009438395,4.947671185000001,6.929274592548609
+exact_even_B25,17,warehouse_small_narrow_kiva,stationary,3781,1.8905,1,25,25,0,0.04981484399999998,5.032194201000001,7.408672608435154

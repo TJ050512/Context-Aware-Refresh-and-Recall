@@ -1,0 +1,13 @@
+{
+  "schema_version": "1",
+  "purpose": "quick causal mechanism gate for selective stale-field repair",
+  "horizon_steps": 300,
+  "post_shift_window": 100,
+  "guidance_scale": 8.0,
+  "maps": ["two_corridor", "three_corridor"],
+  "agent_counts": [24],
+  "workloads": ["abrupt", "recurring"],
+  "seeds": [100, 101, 102, 103],
+  "methods": ["lazy_0", "random_25", "top_25", "repair_all"],
+  "random_selector_seeds": [1701, 2903, 4307]
+}

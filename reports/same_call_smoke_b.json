@@ -1,0 +1,64 @@
+{
+  "artifacts": {
+    "attempt_ledger": {
+      "path": "/root/autodl-tmp/dai/research_workspace/results/same_call_smoke_b/regular_r020_root17_stationary.attempts.jsonl",
+      "sha256": "53ece576abba6cd91da3b613c9b0c385f569db9acdcde2b017f8bcf935381236"
+    },
+    "log": {
+      "path": "/root/autodl-tmp/dai/research_workspace/logs/same_call_smoke_b/regular_r020_root17_stationary.log",
+      "sha256": "b4fbbd3c6d8278abaa6deba83e077c3d302bd8487061c30cea37380c02b9f120"
+    },
+    "output": {
+      "path": "/root/autodl-tmp/dai/research_workspace/results/same_call_smoke_b/regular_r020_root17_stationary.json",
+      "sha256": "14a9913ebeee6d2d295cd74a1b9a7e6535ed557fdca5337825646c514c07f99e"
+    },
+    "runner": {
+      "path": "/root/autodl-tmp/dai/research_workspace/scripts/run_same_call_confirmation_v1.py",
+      "sha256": "9eb203c1caf31f81409787a699a88ebc025071977192ec95b25390b5cc2b5538"
+    }
+  },
+  "b_root_runs_observed": 0,
+  "checks": {
+    "complete_eight_method_family": true,
+    "fresh_process_and_uuid_per_arm": true,
+    "full_scientific_parameters": true,
+    "historical_development_root_only": true,
+    "ledger_exactly_once_and_run_hash_bound": true,
+    "one_thread_environment": true,
+    "paired_task_tape_and_workload": true,
+    "safety_invariants_and_budget": true,
+    "zero_confirmation_roots_opened": true
+  },
+  "claim_scope": "engineering preflight only; no performance estimate or ranking",
+  "effect_inference_performed": false,
+  "execution": {
+    "fresh_process_per_arm": true,
+    "jobs_per_scenario": 30
+  },
+  "jobs_per_scenario": 30,
+  "method_rankings_inspected": false,
+  "methods": [
+    "bootstrap_only",
+    "exact_even_G4",
+    "exact_even_G5",
+    "random_G5",
+    "js_cap_G5",
+    "context_no_reactivation_B25",
+    "context_memory_B25",
+    "exact_even_B25"
+  ],
+  "passed": true,
+  "root_seeds": [
+    17
+  ],
+  "scenario": {
+    "agents": 255,
+    "id": "regular_r020"
+  },
+  "schema": "dai.same-call-engineering-smoke/b",
+  "split": "development",
+  "status": "complete",
+  "workloads": [
+    "stationary"
+  ]
+}

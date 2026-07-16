@@ -1,0 +1,16 @@
+[project]
+name = "dai-lmapf-research"
+version = "0.0.1"
+description = "Correctness-first experiment infrastructure for DAI 2026 LMAPF research"
+requires-python = ">=3.9"
+
+[project.optional-dependencies]
+causal = ["numpy"]
+cnn = ["numpy", "torch"]
+figures = ["reportlab"]
+checkpoint-tools = ["numpy", "pandas"]
+dev = ["pytest"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
