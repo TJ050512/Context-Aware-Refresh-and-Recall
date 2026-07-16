@@ -1,9 +1,25 @@
-# Anonymous Code and Results Supplement
+# DAI2026 Submission — When Should Global Guidance Be Refreshed?
 
-This repository contains the implementation and experimental evidence for an
-adaptive global-guidance publication policy in lifelong multi-agent path
-finding (LMAPF). The proposed policy, **CARR**, chooses one of three actions at
-each decision window:
+## CARR: Anonymous Code and Results Supplement
+
+This repository is the anonymous supplementary artifact for the DAI 2026
+submission *When Should Global Guidance Be Refreshed?* Its purpose is to give
+reviewers a direct, auditable path from the proposed method to the code, the
+3,840-run result table, and every reported numerical conclusion. It is not a
+manuscript repository.
+
+The artifact supports three reviewer tasks:
+
+1. **Inspect the implementation:** follow the CARR policy from causal inputs to
+   hold, reactivate, and generate actions.
+2. **Inspect the evidence:** examine the complete compact Experiment B matrix
+   and its within-cell pairing and safety fields.
+3. **Recompute the conclusions:** regenerate the committed analysis JSON and
+   result figures from the included table.
+
+The proposed adaptive global-guidance publication policy, **CARR**, operates
+in lifelong multi-agent path finding (LMAPF) and chooses one of three actions
+at each decision window:
 
 - **hold** the active guidance;
 - **reactivate** compatible guidance generated earlier; or
@@ -83,7 +99,29 @@ failed non-inferiority test.
 
 ![Root-level paired comparisons](assets/superiority_forest.png)
 
-## Repository contents
+## Repository structure and reviewer path
+
+```mermaid
+flowchart LR
+    A["Start here<br/>README"] --> B["Understand CARR<br/>src/dai_lmapf/"]
+    A --> C["Inspect design<br/>configs/experiment_b_public.json"]
+    A --> D["Inspect 3,840 runs<br/>results/.../compact_runs.csv"]
+    B --> E["Check implementation<br/>tests/"]
+    B --> F["Trace full experiment<br/>scripts/run_same_call_confirmation_*.py"]
+    F --> G["Reconstruct backbone<br/>patches/ + setup_onlineggo.sh"]
+    D --> H["Recompute statistics<br/>scripts/analyze_compact_b.py"]
+    C --> H
+    H --> I["Verify conclusions<br/>reports/compact_b_analysis.json"]
+    I --> J["Review visual evidence<br/>assets/ + figure scripts"]
+```
+
+The upper branch exposes the method and execution code; the lower branch
+connects the public experimental design and per-run evidence to the exact
+statistics and figures reported in the submission. A reviewer interested only
+in numerical verification can follow `README → compact_runs.csv →
+analyze_compact_b.py → compact_b_analysis.json` without building the simulator.
+
+Repository contents:
 
 | Path | Contents |
 |---|---|
