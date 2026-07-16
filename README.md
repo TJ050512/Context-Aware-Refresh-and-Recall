@@ -132,6 +132,9 @@ non-inferiority test is outside that multiplicity family.
 
 ## Method summaries
 
+Boldface identifies the proposed method; it does not indicate the best value in
+each column.
+
 | Code name | Display label | Mean completed tasks | Mean logical calls | Median / P90 / max calls |
 |---|---|---:|---:|---:|
 | `bootstrap_only` | Bootstrap | 4,355.08 | 1.000 | 1 / 1 / 1 |
@@ -139,9 +142,9 @@ non-inferiority test is outside that multiplicity family.
 | `exact_even_G5` | Exact-G5 | 4,505.35 | 6.000 | 6 / 6 / 6 |
 | `random_G5` | Random-G5 | 4,465.94 | 6.000 | 6 / 6 / 6 |
 | `js_cap_G5` | JS-G5 | 4,391.32 | 6.000 | 6 / 6 / 6 |
-| `context_no_reactivation_B25` | CARR-NoRecall | 4,544.06 | 7.073 | 7 / 10 / 13 |
-| `context_memory_B25` | CARR | 4,539.62 | 5.458 | 5 / 8 / 10 |
 | `exact_even_B25` | Exact-B25 | 4,588.90 | 26.000 | 26 / 26 / 26 |
+| `context_no_reactivation_B25` | CARR-NoRecall | 4,544.06 | 7.073 | 7 / 10 / 13 |
+| **`context_memory_B25`** | **CARR (ours)** | **4,539.62** | **5.458** | **5 / 8 / 10** |
 
 ![Sample-mean Pareto frontier](assets/pareto_frontier.png)
 
