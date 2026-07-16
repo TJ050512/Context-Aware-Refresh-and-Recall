@@ -21,6 +21,7 @@ venv/
 env/
 build/
 dist/
+reproduced/
 *.egg-info/
 
 # Local credentials and machine-specific configuration
@@ -45,6 +46,7 @@ reports/CODEX_HANDOFF_EXPERIMENT_B_2026-07-15.md
 *.tgz
 
 # LaTeX build products
+*.log
 *.aux
 *.bbl
 *.bcf

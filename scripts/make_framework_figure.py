@@ -4,8 +4,8 @@
 The figure contrasts the frozen backbone (identical for every policy) with the
 CARR control plane (the only component that varies), and shows the three
 control actions (hold / reactivate / generate) and where each one touches the
-backbone.  It uses the same palette as ``make_b_paper_figures.py`` so the paper
-figures are visually consistent.
+backbone. It uses the same palette as ``make_result_figures.py`` so the
+repository figures are visually consistent.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from reportlab.pdfgen import canvas
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "output" / "pdf"
+OUT = ROOT / "reproduced" / "figures"
 
 NAVY = HexColor("#173A5E")
 BLUE = HexColor("#2F6B9A")

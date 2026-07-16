@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""Experiment B control-plane entry point for the frozen same-call runner.
+"""Experiment B entry point for the bundled same-call runner.
 
-The delegated v1 module remains byte-identical.  This wrapper verifies those
-bytes, replaces only the retired confirmation root registry and the non-causal
-same-call split provenance with their frozen Experiment B values, and then
-invokes the unchanged v1 ``main``.
+This wrapper verifies the bundled v1 bytes, replaces the confirmation root
+registry and non-causal split provenance with their Experiment B values, and
+then invokes the delegated ``main``.  The bundled v1 file has one portability
+edit relative to the executed source: its runtime manifest records the public
+JSON configuration instead of a retired internal protocol document.  That
+manifest path is written after execution and is not consumed by simulation,
+workload, policy, or RNG code.
 """
 
 from __future__ import annotations
@@ -17,7 +20,7 @@ from typing import Any
 
 
 V1_PATH = Path(__file__).with_name("run_same_call_confirmation_v1.py")
-V1_SHA256 = "9eb203c1caf31f81409787a699a88ebc025071977192ec95b25390b5cc2b5538"
+V1_SHA256 = "998e321877e660b5d13618b74905040df258f95657490e764e92cc4b117194eb"
 SPLIT = "same_call_confirmation_v1"
 B_DERIVATION_SOURCE_SHA256 = (
     "6b813b41e5d269fd26cef8d15b6cdb444ee8c01539254072f85f715b4378fa48"

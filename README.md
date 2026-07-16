@@ -1,100 +1,219 @@
-# DAI 2026 research workspace
+# Anonymous Code and Results Supplement
 
-This directory separates the original coursework artifact from the research code that will be used for paper claims.
+This repository contains the implementation and experimental evidence for an
+adaptive global-guidance publication policy in lifelong multi-agent path
+finding (LMAPF). The proposed policy, **CARR**, chooses one of three actions at
+each decision window:
 
-The current paper studies when global guidance should be refreshed in lifelong
-multi-agent path finding. Its main empirical evidence is the frozen Experiment
-B: 3,840 runs across 40 independent root clusters. The registered 1%
-non-inferiority objective was not supported; the supported result is a paired
-throughput--generator-call Pareto trade-off. See
-`reports/SAME_CALL_B_DECISION_2026-07-15.md` for the exact claim boundary.
+- **hold** the active guidance;
+- **reactivate** compatible guidance generated earlier; or
+- **generate** and install new guidance with a frozen CNN.
 
-- `coursework_baseline/`: an unchanged copy of the submitted reproducibility package. It is evidence of the starting point, not the paper implementation.
-- `RESEARCH_DESIGN.md`: current novelty assessment, research questions, baseline ladder, experiment protocol, and submission gates.
-- `KNOWN_VALIDITY_ISSUES.md`: issues that invalidate the current numerical claims until fixed.
-- `OFFICIAL_BACKBONE_AUDIT.md`: pinned OnlineGGO source audit, refresh/reuse semantics, direction-order risk, and platform preflight.
-- `OFFICIAL_GATE0_RUNBOOK.md`: exact Linux build, semantic sentinels, and first official experiment sequence.
-- `SELECTIVE_REPAIR_EXPERIMENT.md`: historical selective stale-field repair protocol and locked No-Go result.
-- `GUIDANCE_VERSIONING_EXPERIMENT.md`: current source-aligned paper hypothesis and official experiment gate.
-- `RESEARCH_STATUS.md`: compact decision log with completed runs, negative results, and the current blocker.
-- `PAPER_WRITING_GUIDE.md`: safe-to-write sections, forbidden claims, and planned result tables while official runs are pending.
-- `configs/pilot_protocol.yaml`: machine-readable specification for the first correctness and non-stationary pilot runs.
-- `configs/guidance_versioning_gate0.json`: frozen official OnlineGGO feasibility manifest for the first Linux run.
-- `src/dai_lmapf/`: planner-independent scenario, task, controller, and safety interfaces for the new research implementation.
-- `tests/`: correctness tests that run without third-party dependencies.
+All evaluated policies use the same task tapes, CNN generator, and GPIBT
+planner. Only the guidance-publication policy changes. Author information,
+manuscript sources, build products, machine logs, and unrelated exploratory
+experiments are intentionally excluded.
 
-The first implementation milestone is a correctness gate. No new throughput result should be reported until every simulated step is checked for vertex and edge-swap collisions and task generation excludes zero-distance shortcuts.
+## Main result
 
-The locked smoke validation has completed, but it modeled eager global guidance
-recomputation. Official source inspection showed that OnlineGGO's GPIBT update
-is future-only. A subsequent locked selective-repair diagnostic was also
-No-Go. Treat both smoke results as diagnostic; the current claim-bearing plan
-is route-cohort-aware guidance publication.
+The primary 1% non-inferiority objective against dense refresh was **not met**.
+The supported conclusion is a sample-mean throughput–generator-call trade-off,
+not throughput parity and not a runtime, energy, or global state-of-the-art
+claim.
 
-Run the current foundation tests with:
+| Comparison | Experiment B result | Interpretation |
+|---|---:|---|
+| CARR vs. Exact-B25 | -0.8006% paired mean relative effect; 95% whole-root CI [-1.1935%, -0.3966%]; shifted exact p = 0.1693 | All three non-inferiority gates failed |
+| Logical generator calls | 5.458 for CARR vs. 26 for Exact-B25 | 79.006% fewer logical calls |
+| CARR vs. five low-call comparators | +0.75% to +4.42%; all Holm-adjusted p < 0.002 | Supported paired throughput improvements in the evaluated setting |
+| CARR vs. CARR-NoRecall | -0.108%; 95% CI [-0.257%, 0.029%]; Holm p = 0.925 | No supported throughput benefit from recall |
+| Mean calls with/without recall | 5.458 vs. 7.073 | Recall descriptively substitutes reactivation for some new generations |
 
-```bash
-PYTHONPATH=src python3 -m unittest discover -s tests -v
-```
+The independent inferential unit is the **root cluster (n = 40)**, not an
+individual run row.
+
+![CARR framework](assets/framework.png)
+
+## Experimental design
+
+Experiment B is a fully paired matrix:
+
+| Dimension | Value |
+|---|---|
+| Policies | 8 |
+| Independent root clusters | 40 |
+| Scenarios | 4 |
+| Workloads | stationary, abrupt, recurrent |
+| Total runs | 8 × 40 × 4 × 3 = 3,840 |
+| Runs per policy | 480 |
+| Warm-up / scored horizon | 200 / 2,000 timesteps |
+| Decision window | 20 timesteps |
+
+| Scenario | Map | Density | Agents |
+|---|---|---:|---:|
+| `narrow_r020` | narrow warehouse | 0.20 | 218 |
+| `narrow_r035` | narrow warehouse | 0.35 | 382 |
+| `regular_r020` | regular warehouse | 0.20 | 255 |
+| `regular_r035` | regular warehouse | 0.35 | 447 |
+
+Every scenario–root–workload cell uses the same task-tape, release-projection,
+and reset-causal fingerprints across all eight methods. Intervals use 10,000
+whole-root bootstrap samples. Superiority tests use exact root-level sign
+flips with Holm correction across six comparisons. The primary
+non-inferiority test is outside that multiplicity family.
+
+## Method summaries
+
+| Code name | Display label | Mean completed tasks | Mean logical calls | Median / P90 / max calls |
+|---|---|---:|---:|---:|
+| `bootstrap_only` | Bootstrap | 4,355.08 | 1.000 | 1 / 1 / 1 |
+| `exact_even_G4` | Exact-G4 | 4,451.10 | 5.000 | 5 / 5 / 5 |
+| `exact_even_G5` | Exact-G5 | 4,505.35 | 6.000 | 6 / 6 / 6 |
+| `random_G5` | Random-G5 | 4,465.94 | 6.000 | 6 / 6 / 6 |
+| `js_cap_G5` | JS-G5 | 4,391.32 | 6.000 | 6 / 6 / 6 |
+| `context_no_reactivation_B25` | CARR-NoRecall | 4,544.06 | 7.073 | 7 / 10 / 13 |
+| `context_memory_B25` | CARR | 4,539.62 | 5.458 | 5 / 8 / 10 |
+| `exact_even_B25` | Exact-B25 | 4,588.90 | 26.000 | 26 / 26 / 26 |
+
+![Sample-mean Pareto frontier](assets/pareto_frontier.png)
+
+The sample-mean frontier contains Bootstrap, Exact-G4, CARR-NoRecall, CARR,
+and Exact-B25. CARR is not point-dominated, but this does not override the
+failed non-inferiority test.
+
+![Root-level paired comparisons](assets/superiority_forest.png)
 
 ## Repository contents
 
-- `src/dai_lmapf/`: planner-independent controllers, protocols, invariants,
-  task generation, and OnlineGGO adapters.
-- `scripts/`: experiment drivers, frozen analyzers, integrity audits, and
-  paper-figure generation.
-- `configs/`: machine-readable frozen protocols and experiment manifests.
-- `tests/`: correctness, safety, publication-policy, and analysis tests.
-- `paper/`: canonical anonymous manuscript source (`main.tex`).
-- `reports/`: decision memos, integrity evidence, and compact frozen analyses.
-- `results/`: compact CSV tables and selected analysis summaries only.
-- `patches/`: the pinned OnlineGGO source patch and experiment configs.
+| Path | Contents |
+|---|---|
+| `src/dai_lmapf/` | CARR policy, workload construction, safety contracts, frozen-CNN wrapper, and OnlineGGO adapter |
+| `scripts/run_same_call_confirmation_*.py` | Experiment execution entry points |
+| `scripts/analyze_compact_b.py` | Standard-library analysis of the included 3,840-run table |
+| `scripts/make_*figure*.py` | Result and framework figure generation |
+| `configs/experiment_b_public.json` | Methods, roots, scenarios, workloads, and inferential settings |
+| `results/same_call_confirmation_b/compact_runs.csv` | Anonymous per-run experimental results |
+| `reports/compact_b_analysis.json` | Machine-readable audit, statistics, tests, and Pareto summary |
+| `patches/` | Patch and configuration files for the pinned OnlineGGO backbone |
+| `tests/` | Core implementation and result-regression tests |
 
-## Reconstruct the OnlineGGO backbone
+The claim-bearing code path is:
 
-The modified third-party checkout is intentionally not embedded as a nested
-Git repository. Reconstruct it from the pinned upstream revision and recorded
-patch with:
+```text
+absolute workload tape
+  -> OnlineGGO environment adapter
+  -> causal observation and invariants
+  -> CARR publication policy
+       -> hold
+       -> reactivate cached guidance
+       -> generate guidance with the frozen CNN
+  -> GPIBT planner
+  -> completed-task count
+```
+
+The corresponding files are
+`absolute_workload.py`, `online_ggo_adapter.py`, `invariants.py`,
+`publication_policy.py`, `frozen_cnn_generator.py`, and
+`same_call_claim_runner.py`.
+
+## Reproduce the reported analysis
+
+The analysis itself requires only Python 3.9 or later and the standard
+library:
+
+```bash
+python3 scripts/analyze_compact_b.py \
+  --output reproduced/compact_b_analysis.json --force
+# Optional byte-for-byte check on macOS/Linux:
+cmp reproduced/compact_b_analysis.json reports/compact_b_analysis.json
+```
+
+The command validates the complete matrix, pairing fingerprints, safety flags,
+and generator/publication conservation before recomputing:
+
+- method summaries and call distributions;
+- paired root-level effects and bootstrap intervals;
+- exact sign-flip tests and Holm correction;
+- the three non-inferiority gates; and
+- the sample-mean Pareto frontier.
+
+Expected artifact hashes:
+
+| Artifact | SHA-256 |
+|---|---|
+| `compact_runs.csv` | `223951f30d7ca4f142a5b945cdc1e53ed59ac40ce7d0a19e949f3f4f3bbe626a` |
+| `compact_b_analysis.json` | `b675db23a294d2f1becae7f6eb5e231004e883c6f737e131069cc75df9cb22b0` |
+
+## Tests
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src \
+  python3 -m unittest discover -s tests -v
+```
+
+The compact-result regression test can be run separately:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src \
+  python3 -m unittest -v tests.test_compact_b_artifact
+```
+
+NumPy and PyTorch are optional and enable the frozen-CNN checks:
+
+```bash
+python3 -m pip install -e '.[experiment]'
+```
+
+## Regenerate figures
+
+```bash
+python3 -m pip install -e '.[figures]'
+python3 scripts/make_result_figures.py
+python3 scripts/make_framework_figure.py
+```
+
+Generated PDFs are written to `reproduced/figures/` and are not tracked.
+The PNG files under `assets/` are the reviewer-facing previews included in
+this repository.
+
+## Full experiment code
+
+The modified backbone is reconstructed from a pinned upstream OnlineGGO
+revision and the patch in `patches/`:
 
 ```bash
 bash scripts/setup_onlineggo.sh
 ```
 
-See `patches/README.md` for provenance and licensing details.
-
-## Main paper evidence
-
-The Experiment B evidence should be read in this order:
-
-1. `reports/same_call_confirmation_b_analysis.json`
-2. `reports/same_call_confirmation_b_analysis.md`
-3. `reports/SAME_CALL_B_DECISION_2026-07-15.md`
-4. `results/same_call_confirmation_b/*.csv`
-
-The four large raw Experiment B JSON files, attempt ledgers, logs, temporary
-files, and local credentials are excluded from ordinary Git history. Their
-integrity hashes remain in the reports. The complete raw archive should be
-published separately as a versioned release asset or archival dataset, then
-linked here; it should not be force-added to this repository.
-
-## Paper build and figures
-
-Build instructions and evidence precedence are in `paper/README.md`. The data
-figures require `reportlab`; the foundation test suite uses only the project
-source tree and Python's standard test runner.
-
-Optional dependencies are grouped by task:
+The full experiment entry point is:
 
 ```bash
-python3 -m pip install -e '.[causal]'           # NumPy controller utilities
-python3 -m pip install -e '.[cnn]'              # frozen CNN inference
-python3 -m pip install -e '.[figures]'          # paper figures
-python3 -m pip install -e '.[checkpoint-tools]' # checkpoint extraction
+python3 scripts/run_same_call_confirmation_b.py --help
 ```
 
-## License status
+A full 3,840-run rerun additionally requires the trained CNN checkpoint and a
+native OnlineGGO build. Those large machine-dependent artifacts are not
+included here; the portable public design is in
+`configs/experiment_b_public.json`. The included compact table and analysis
+are sufficient to audit every numerical result reported above.
 
-No license has yet been selected for the original code in this repository.
-Until one is added, the default copyright rules apply. The OnlineGGO patch is
-derived from the MIT-licensed upstream project; its license notice is retained
-under `patches/OnlineGGO-LICENSE`.
+For portability, the bundled base runner records the public JSON configuration
+in its post-run source manifest instead of the retired internal protocol file.
+This manifest-path substitution is non-causal: it is not read by the
+simulation, workload, publication policy, or random-number streams.
+
+In the public configuration, `standalone_replication` means that Experiment B
+is analyzed independently rather than pooled with earlier experiments. It
+does not mean that the external checkpoint and native simulator build are
+bundled in this repository.
+
+## Result-file scope
+
+`compact_runs.csv` contains outcomes, logical call counts,
+generation/reactivation counts, safety flags, and within-cell pairing hashes.
+It intentionally contains no author names, hostnames, filesystem paths,
+process identifiers, timestamps, or environment fingerprints.
+
+`compact_b_analysis.json` contains the complete computed numerical result.
+The compact layer supports result reproduction and matrix-level checks; it
+does not replace trace-level inspection of the original simulator logs.
