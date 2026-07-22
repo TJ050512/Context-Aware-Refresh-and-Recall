@@ -1,10 +1,12 @@
-# DAI2026 Submission — CARR: When Should Global Guidance Be Refreshed?
+# DAI 2026 Submission — Resource-Aware Guidance Refresh Control
 
 This repository is the anonymous supplementary artifact for the DAI 2026
-submission *When Should Global Guidance Be Refreshed?* Its purpose is to give
-reviewers a direct, auditable path from the proposed method to the code, the
-3,840-run result table, and every reported numerical conclusion. It is not a
-manuscript repository.
+submission *Resource-Aware Guidance Refresh Control: A Paired Pareto Study in
+Lifelong Multi-Agent Path Finding*. Its purpose is to give reviewers a direct,
+auditable path from the proposed method to the code, the 3,840-run result
+table, and every reported numerical conclusion. It is not a manuscript
+repository; manuscript sources, author information, and the submitted PDF are
+intentionally excluded to preserve double-blind review.
 
 ## Repository Structure
 
@@ -14,7 +16,7 @@ CARR/
 ├── pyproject.toml                                 # Package metadata and optional dependencies
 ├── src/dai_lmapf/                                 # CARR implementation
 │   ├── __init__.py                                # Package exports
-│   ├── publication_policy.py                      # Hold/reactivate/generate policy logic
+│   ├── publication_policy.py                      # Hold/recall/generate policy logic
 │   ├── same_call_claim_runner.py                  # Causal features, budgets, and safety audit
 │   ├── online_ggo_adapter.py                      # Interface to the OnlineGGO simulator
 │   ├── frozen_cnn_generator.py                    # Frozen guidance-generator wrapper
@@ -67,20 +69,21 @@ The compact analysis requires only Python's standard library; rebuilding the
 full simulator additionally requires the patched OnlineGGO backbone and the
 trained checkpoint described below.
 
-## Method Overview
+## Method overview
 
-The proposed adaptive global-guidance publication policy, **CARR**, operates
+The proposed resource-aware guidance lifecycle controller, **CARR**, operates
 in lifelong multi-agent path finding (LMAPF) and chooses one of three actions
 at each decision window:
 
 - **hold** the active guidance;
-- **reactivate** compatible guidance generated earlier; or
+- **recall** and reinstall compatible guidance generated earlier; or
 - **generate** and install new guidance with a frozen CNN.
 
 All evaluated policies use the same task tapes, CNN generator, and GPIBT
-planner. Only the guidance-publication policy changes. Author information,
-manuscript sources, build products, machine logs, and unrelated exploratory
-experiments are intentionally excluded.
+planner. Only the guidance lifecycle controller changes. The frozen
+implementation uses `reactivate` in operation names, configuration identifiers,
+and audit fields; this is the implementation-level name of the action called
+**recall** in the paper and this README.
 
 ## Main result
 
@@ -95,7 +98,7 @@ claim.
 | Logical generator calls | 5.458 for CARR vs. 26 for Exact-B25 | 79.006% fewer logical calls |
 | CARR vs. five low-call comparators | +0.75% to +4.42%; all Holm-adjusted p < 0.002 | Supported paired throughput improvements in the evaluated setting |
 | CARR vs. CARR-NoRecall | -0.108%; 95% CI [-0.257%, 0.029%]; Holm p = 0.925 | No supported throughput benefit from recall |
-| Mean calls with/without recall | 5.458 vs. 7.073 | Recall descriptively substitutes reactivation for some new generations |
+| Mean calls with/without recall | 5.458 vs. 7.073 | Recall descriptively substitutes cached guidance for some fresh generations |
 
 The independent inferential unit is the **root cluster (n = 40)**, not an
 individual run row.
@@ -162,9 +165,9 @@ The claim-bearing code path is:
 absolute workload tape
   -> OnlineGGO environment adapter
   -> causal observation and invariants
-  -> CARR publication policy
+  -> CARR guidance lifecycle controller
        -> hold
-       -> reactivate cached guidance
+       -> recall cached guidance
        -> generate guidance with the frozen CNN
   -> GPIBT planner
   -> completed-task count
@@ -188,7 +191,7 @@ cmp reproduced/compact_b_analysis.json reports/compact_b_analysis.json
 ```
 
 The command validates the complete matrix, pairing fingerprints, safety flags,
-and generator/publication conservation before recomputing:
+and generator/switch conservation before recomputing:
 
 - method summaries and call distributions;
 - paired root-level effects and bootstrap intervals;
@@ -259,7 +262,7 @@ are sufficient to audit every numerical result reported above.
 For portability, the bundled base runner records the public JSON configuration
 in its post-run source manifest instead of the retired internal protocol file.
 This manifest-path substitution is non-causal: it is not read by the
-simulation, workload, publication policy, or random-number streams.
+simulation, workload, guidance lifecycle controller, or random-number streams.
 
 In the public configuration, `standalone_replication` means that Experiment B
 is analyzed independently rather than pooled with earlier experiments. It
@@ -270,6 +273,8 @@ bundled in this repository.
 
 `compact_runs.csv` contains outcomes, logical call counts,
 generation/reactivation counts, safety flags, and within-cell pairing hashes.
+Here `reactivation` is the frozen implementation and audit-field name for the
+paper's recall action.
 It intentionally contains no author names, hostnames, filesystem paths,
 process identifiers, timestamps, or environment fingerprints.
 
