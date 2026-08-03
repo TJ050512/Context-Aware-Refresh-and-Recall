@@ -1,0 +1,19 @@
+{
+  "n_decisions": 23520,
+  "n_switches": 1543,
+  "switch_auc_sign_advantage": 0.7827508480473355,
+  "switch_auc_folds": [
+    0.7983243823845327,
+    0.8026839826839827,
+    0.7098402369332165,
+    0.8152232383001614,
+    0.7876823999347844
+  ],
+  "best_suppression": {
+    "tau": 2.0,
+    "fraction_of_rule_switches_suppressed": 0.5095541401273885,
+    "mean_true_advantage_of_suppressed": -2.0860416666666666,
+    "mean_true_advantage_of_kept": 8.585497835497835
+  },
+  "interpretation": "AUC>0.5 on sign(advantage) means state can rank refresh value; if suppressed switches have negative true advantage, a selective policy can cut calls without losing (or while gaining) throughput."
+}

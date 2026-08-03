@@ -1,0 +1,4 @@
+method,seed,map_id,workload,num_task_finished,throughput_per_timestep,mandatory_bootstrap_calls,post_bootstrap_publication_count,publication_budget,budget_violation_count,generator_seconds,simulator_seconds,elapsed_seconds
+context_learned_lite,17,warehouse_small_narrow_kiva,stationary,3857,1.9285,1,0,25,0,0.003449804,6.9023192579999995,15.599920062348247
+context_memory_B25,17,warehouse_small_narrow_kiva,stationary,3873,1.9365,1,9,25,0,0.008594817,6.813659356999999,13.459879944100976
+exact_even_B25,17,warehouse_small_narrow_kiva,stationary,3818,1.909,1,25,25,0,0.06575813800000001,7.133096655999999,14.251326645724475

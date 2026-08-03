@@ -1,0 +1,16 @@
+{
+  "n_decision_rows": 23760,
+  "n_seeds": 10,
+  "rule_accept_rate": 0.06494107744107744,
+  "raw4": {
+    "cv_agreement_mean": 0.7880471380471381,
+    "cv_auc_mean": 0.519271784580151,
+    "cv_predicted_call_rate_mean": 0.26005892255892255
+  },
+  "fullstate": {
+    "cv_agreement_mean": 0.9822390572390572,
+    "cv_auc_mean": 0.43044047913210637,
+    "cv_predicted_call_rate_mean": 0.08261784511784512
+  },
+  "interpretation": "raw4 ~0.5 AUC means the four proposed raw features alone cannot reproduce the rule; fullstate high AUC means the rule is a smooth function of its causal state (score vs running threshold)."
+}
