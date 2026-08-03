@@ -2,7 +2,7 @@
 """Build a development-only CARR-RL-lite runner by patching the frozen v1 runner.
 
 This script NEVER touches the frozen artifact `run_same_call_confirmation_v1.py`
-(SHA 9eb203c1...).  It reads that file, applies three surgical string
+(SHA 998e3218...).  It reads that file, applies three surgical string
 substitutions, and writes a NEW development-only runner
 `run_carr_rl_lite_dev.py`.  All B/C confirmatory roots, the frozen policy
 classes, and every confirmatory harness remain untouched.
@@ -18,9 +18,10 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-FROZEN = Path("scripts/run_same_call_confirmation_v1.py")
-OUT = Path("scripts/run_carr_rl_lite_dev.py")
-EXPECTED_FROZEN_SHA = "9eb203c1caf31f81409787a699a88ebc025071977192ec95b25390b5cc2b5538"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+FROZEN = REPO_ROOT / "scripts/run_same_call_confirmation_v1.py"
+OUT = Path(__file__).resolve().parent / "run_carr_rl_lite_dev.py"
+EXPECTED_FROZEN_SHA = "998e321877e660b5d13618b74905040df258f95657490e764e92cc4b117194eb"
 
 LEARNED = "context_learned_lite"
 

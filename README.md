@@ -1,8 +1,8 @@
-# DAI 2026 Submission — Resource-Aware Guidance Refresh Control
+# DAI 2026 Submission — Budgeted Guidance Refresh Control
 
 This repository is the anonymous supplementary artifact for the DAI 2026
-submission *Resource-Aware Guidance Refresh Control: A Paired Pareto Study in
-Lifelong Multi-Agent Path Finding*. Its purpose is to give reviewers a direct,
+submission *Budgeted Guidance Refresh Control: A Paired Throughput–Call Study
+in Lifelong Multi-Agent Path Finding*. Its purpose is to give reviewers a direct,
 auditable path from the proposed method to the code, the 3,840-run result
 table, and every reported numerical conclusion. It is not a manuscript
 repository; manuscript sources, author information, and the submitted PDF are
@@ -28,6 +28,7 @@ CARR/
 │   ├── run_same_call_confirmation_b.py            # Experiment B entry point
 │   ├── run_same_call_confirmation_v1.py           # Full paired experiment runner
 │   ├── analyze_compact_b.py                       # Recompute all reported statistics
+│   ├── analyze_posthoc_review_sensitivity.py      # Recompute exploratory root bootstraps
 │   ├── make_result_figures.py                     # Regenerate result figures
 │   ├── make_framework_figure.py                   # Regenerate the CARR framework figure
 │   ├── setup_onlineggo.sh                         # Reconstruct the patched backbone
@@ -37,7 +38,13 @@ CARR/
 ├── results/same_call_confirmation_b/
 │   └── compact_runs.csv                           # Complete 3,840-run result table
 ├── reports/
-│   └── compact_b_analysis.json                    # Recomputed statistics and integrity audit
+│   ├── compact_b_analysis.json                    # Confirmatory statistics and integrity audit
+│   └── posthoc_review_sensitivity_2026-08-03.json # Exploratory robustness report
+├── carr_rl_lite_exp/                              # Development-only appendix evidence
+│   ├── README.md                                  # Scope, provenance, and reproduction notes
+│   ├── ARTIFACT_SHA256.json                       # Checksums for compact appendix evidence
+│   ├── scripts/                                   # Learned gate and verification utilities
+│   └── results/                                   # Compact summaries and development CSVs
 ├── assets/                                        # Figures displayed in this README
 │   ├── framework.png                              # CARR system architecture
 │   ├── pareto_frontier.png                        # Throughput–call Pareto frontier
@@ -104,6 +111,35 @@ The independent inferential unit is the **root cluster (n = 40)**, not an
 individual run row.
 
 ![CARR framework](assets/framework.png)
+
+## Exploratory appendix evidence
+
+The directory [`carr_rl_lite_exp/`](carr_rl_lite_exp/) contains the additional
+development-only and post-hoc checks reported in the appendix: the
+development-tuned learned gate, the matched G5 generation-cap comparison,
+one-at-a-time threshold sensitivity, logical-call timing diagnostics, and
+bootstrap frontier stability. These checks are explicitly separated from the
+frozen Experiment B confirmatory matrix. They neither change the primary
+estimand nor enter the six-comparison multiplicity family.
+
+For the learned holdout check, the archived historical report's `6.51 vs
+6.50` values are effective post-bootstrap guidance publications, not generator
+invocations. The accompanying raw-counter projection records the unambiguous
+total generator-call means (`4.83` learned vs `5.38` rule CARR) while retaining
+the historical report unchanged for provenance.
+
+Two bootstrap streams are kept separate on purpose:
+
+- `reports/posthoc_review_sensitivity_2026-08-03.json` is the canonical
+  `seed=20260803` source for the log-ratio and call-difference sensitivity
+  analyses;
+- `carr_rl_lite_exp/results/carr_rl_lite/expB_pareto_bootstrap.json` is the
+  `seed=20260715` source for the reported 100% CARR non-dominance and 99.97%
+  point-dominance frequency against Exact-G5.
+
+The 99.96% value obtained when the frontier check reuses the first stream is a
+one-resample Monte-Carlo difference, not a substantive discrepancy. The
+submitted number is backed by the dedicated Pareto report above.
 
 ## Experimental design
 
@@ -206,11 +242,41 @@ Expected artifact hashes:
 | `compact_runs.csv` | `223951f30d7ca4f142a5b945cdc1e53ed59ac40ce7d0a19e949f3f4f3bbe626a` |
 | `compact_b_analysis.json` | `b675db23a294d2f1becae7f6eb5e231004e883c6f737e131069cc75df9cb22b0` |
 
+The post-hoc root-bootstrap report is independently reproducible:
+
+```bash
+python3 scripts/analyze_posthoc_review_sensitivity.py \
+  --csv results/same_call_confirmation_b/compact_runs.csv \
+  --output reproduced/posthoc_review_sensitivity_2026-08-03.json \
+  --seed 20260803 --bootstrap-samples 10000
+cmp reproduced/posthoc_review_sensitivity_2026-08-03.json \
+  reports/posthoc_review_sensitivity_2026-08-03.json
+```
+
+| Exploratory artifact | SHA-256 |
+|---|---|
+| `analyze_posthoc_review_sensitivity.py` | `854eb256f76c4ad71c020d0807ec04b05a11461c4d1184665abe02338507e67a` |
+| `posthoc_review_sensitivity_2026-08-03.json` | `77845872984724a9f8f73e3537e584a17d41aab48b543f6fc7b3161e5e7cf0ea` |
+
+Additional appendix checks and their hashes are validated by
+`carr_rl_lite_exp/scripts/verify_public_summaries.py` against
+`carr_rl_lite_exp/ARTIFACT_SHA256.json`.
+
 ## Tests
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src \
   python3 -m unittest discover -s tests -v
+```
+
+The same suite regenerates the development runner from the frozen v1 runner,
+checks all compact exploratory summaries against their public CSVs, reproduces
+the post-hoc report byte for byte, and scans committed result files for
+machine-specific path or host leakage. The exploratory verifier can also be
+run directly:
+
+```bash
+python3 carr_rl_lite_exp/scripts/verify_public_summaries.py
 ```
 
 The compact-result regression test can be run separately:

@@ -1,0 +1,32 @@
+{
+  "schema": "dai.carr-rl-lite-holdout-resource-counts/v1",
+  "scope": "Development-only held-out seeds 21-26; descriptive, not confirmatory.",
+  "source": "resource_counts.csv projected from the archived raw holdout JSONs",
+  "rows": 216,
+  "cells_per_method": 72,
+  "counter_semantics": {
+    "total_generator_calls": "mandatory bootstrap plus fresh post-bootstrap generations",
+    "post_bootstrap_publications": "effective fresh or recalled guidance installations; not generator calls"
+  },
+  "methods": {
+    "context_learned_lite": {
+      "mean_total_generator_calls": 4.833333333333333,
+      "mean_post_bootstrap_generations": 3.8333333333333335,
+      "mean_post_bootstrap_recalls": 2.6805555555555554,
+      "mean_post_bootstrap_publications": 6.513888888888889
+    },
+    "context_memory_B25": {
+      "mean_total_generator_calls": 5.375,
+      "mean_post_bootstrap_generations": 4.375,
+      "mean_post_bootstrap_recalls": 2.125,
+      "mean_post_bootstrap_publications": 6.5
+    },
+    "exact_even_B25": {
+      "mean_total_generator_calls": 26.0,
+      "mean_post_bootstrap_generations": 25.0,
+      "mean_post_bootstrap_recalls": 0.0,
+      "mean_post_bootstrap_publications": 25.0
+    }
+  },
+  "legacy_report_note": "The historical ab_holdout/report.json fields mean_calls_learned and mean_calls_rule were computed from post_bootstrap_publication_count. They are retained unchanged for provenance but denote effective publications, not generator invocations."
+}

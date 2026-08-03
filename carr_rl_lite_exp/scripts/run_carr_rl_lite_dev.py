@@ -2368,7 +2368,7 @@ def main() -> None:
         "period_on_sim": module_paths[0],
         "map": map_path,
         "checkpoint_file": checkpoint.path,
-        "protocol": workspace / "EXPERIMENT_PROTOCOL_SAME_CALL_2026-07-14.md",
+        "experiment_config": workspace / "configs/experiment_b_public.json",
     }
     missing_runtime_sources = [
         str(path) for path in runtime_source_paths.values() if not path.is_file()

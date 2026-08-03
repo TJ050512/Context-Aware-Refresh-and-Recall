@@ -37,6 +37,7 @@ id_ed25519*
 # Temporary, machine-local, and duplicate archive material
 tmp/
 logs/
+carr_rl_lite_exp/results/**/smoke*.json
 archives/
 coursework_baseline/
 reports/CODEX_HANDOFF_EXPERIMENT_B_2026-07-15.md
