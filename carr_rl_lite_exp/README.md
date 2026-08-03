@@ -37,6 +37,7 @@ results/
     model/                       # raw4/fullstate policy + agreement/AUC report
     advantage/                   # sign-advantage diagnostic report
     matrix_a/                    # earlier (flawed) GBDT-gate matrix, kept for provenance
+    expB_posthoc_robustness.json  # Appendix B log-ratio sensitivity + frontier-stability (seed 20260803)
     expB_genlatency.json         # Appendix B generator-latency aggregate
     expB_pareto_bootstrap.json   # Appendix B frontier-stability frequencies
     expF_g5cap.json              # Appendix D (G5Cap) summary
@@ -69,3 +70,6 @@ results/
 * **Threshold sensitivity (narrow_r020, dev):** all one-at-a-time effects
   stayed negative; max absolute departure from the frozen effect **0.637 pp**.
   See `results/carr_rl_lite/expG_threshsens.json`.
+* **Post-hoc robustness (Appendix B):** log-ratio sensitivity and frontier-stability
+  frequencies recomputed from `compact_runs.csv` (seed 20260803) are archived in
+  `results/carr_rl_lite/expB_posthoc_robustness.json`.
