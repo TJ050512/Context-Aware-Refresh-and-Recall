@@ -19,6 +19,11 @@ Paired Throughput–Call Study in Lifelong Multi-Agent Path Finding"* (DAI 2026)
 > `998e321877e660b5d13618b74905040df258f95657490e764e92cc4b117194eb`) was never
 > modified.
 
+> **See also `CONTROLLED_RESOURCE_MEASUREMENT.md`** for a post-submission
+> controlled (`timing_evidence_valid=true`) wall-clock microbenchmark that
+> quantifies exactly what the paper's "logical generator call" does and does
+> not correspond to on the evaluation host.
+
 ## Layout
 
 ```
