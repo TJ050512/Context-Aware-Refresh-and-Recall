@@ -19,7 +19,7 @@ Paired Throughput–Call Study in Lifelong Multi-Agent Path Finding"* (DAI 2026)
 > `998e321877e660b5d13618b74905040df258f95657490e764e92cc4b117194eb`) was never
 > modified.
 
-> **See also `CONTROLLED_RESOURCE_MEASUREMENT.md`** for a post-submission
+> **See also `CONTROLLED_RESOURCE_MEASUREMENT.md`** for a post-confirmatory
 > controlled (`timing_evidence_valid=true`) wall-clock microbenchmark that
 > quantifies exactly what the paper's "logical generator call" does and does
 > not correspond to on the evaluation host.
@@ -50,6 +50,7 @@ results/
   path_f_g5cap_dev/              # G5Cap dev matrices (CSV)
   path_g_threshold_sweep/        # threshold-sweep dev matrices (CSV)
 ARTIFACT_SHA256.json             # checksums for compact reports and scripts
+CONTROLLED_RESOURCE_MEASUREMENT.md # controlled timing scope and interpretation
 ```
 
 ## Key numbers (as reported in the paper)
@@ -74,6 +75,12 @@ ARTIFACT_SHA256.json             # checksums for compact reports and scripts
   0.0713 s per CARR run vs 0.3117 s per Exact-B25 run. These runs were marked
   `timing_evidence_valid=false`; not controlled wall-clock/energy evidence. See
   `results/carr_rl_lite/expB_genlatency.json`.
+* **Controlled timing boundary (development-only; two runs per method):** CARR
+  used 43.3% less generator-only time than Exact-B25 but had 10.2% higher mean
+  end-to-end time. The unweighted mean run-level CNN latency was 1.83 ms/call
+  (pooled ratio 1.66 ms/call). This is descriptive evidence that logical calls
+  are not a physical-resource proxy, not an acceleration claim. See
+  `CONTROLLED_RESOURCE_MEASUREMENT.md`.
 * **Frontier stability (10,000 whole-root bootstrap resamples):** CARR
   non-dominated in 100% and point-dominated Exact-G5 in **99.97%** using the
   dedicated `seed=20260715` Pareto stream. Reusing the separate post-hoc stream
@@ -91,8 +98,9 @@ ARTIFACT_SHA256.json             # checksums for compact reports and scripts
 
 From the repository root, the following standard-library command recomputes
 the statistics recoverable from the public development CSVs, validates the
-compact diagnostic reports and their SHA-256 manifest, and rejects committed
-result files containing machine-specific absolute paths or host values:
+compact diagnostic reports (including the controlled microbenchmark) and
+their SHA-256 manifest, and rejects committed result files containing
+machine-specific absolute paths or host values:
 
 ```bash
 python3 carr_rl_lite_exp/scripts/verify_public_summaries.py

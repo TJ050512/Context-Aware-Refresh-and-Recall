@@ -1,10 +1,16 @@
 {
-  "timing_evidence_valid": [
-    true
-  ],
+  "schema": "dai.carr-controlled-microbenchmark/v1",
+  "evidence_class": "development_descriptive",
+  "timing_evidence_valid": true,
+  "n_runs": 6,
+  "n_runs_per_method": 2,
+  "seeds": [17, 18],
+  "scenario": "narrow_r020",
+  "workload": "abrupt",
+  "calls_include_mandatory_bootstrap": true,
   "per_method": {
     "context_memory_B25": {
-      "calls": 8,
+      "calls": 8.0,
       "gen_s": 0.0213806415,
       "sim_s": 6.382566478,
       "elapsed_s": 13.974251482170075,
@@ -12,7 +18,7 @@
       "elapsed_p90": 13.988598682917655
     },
     "context_no_reactivation_B25": {
-      "calls": 10,
+      "calls": 10.0,
       "gen_s": 0.014078532000000001,
       "sim_s": 5.228205719000002,
       "elapsed_s": 11.691978997550905,
@@ -20,7 +26,7 @@
       "elapsed_p90": 12.457977782934904
     },
     "exact_even_B25": {
-      "calls": 26,
+      "calls": 26.0,
       "gen_s": 0.037740547000000006,
       "sim_s": 5.3487774455,
       "elapsed_s": 12.677668096031994,
@@ -29,6 +35,12 @@
     }
   },
   "per_call_gen_latency_s": 0.0018298458925264552,
+  "per_call_gen_latency_definition": "unweighted mean of run-level generator_seconds / total_generator_calls",
+  "per_call_gen_latency_median_s": 0.001596041514423077,
+  "pooled_gen_latency_s": 0.0016636300113636365,
+  "pooled_gen_latency_definition": "sum(generator_seconds) / sum(total_generator_calls)",
+  "microbench_call_reduction_pct": 69.23076923076923,
   "end_to_end_carr_vs_b25_pct": 10.227301869055095,
-  "generator_only_reduction_pct": 43.34835290013153
+  "generator_only_reduction_pct": 43.34835290013153,
+  "interpretation": "descriptive controlled timing check; not confirmatory, not a wall-clock or energy savings claim"
 }

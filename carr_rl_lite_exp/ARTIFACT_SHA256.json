@@ -2,6 +2,7 @@
   "schema": "dai.carr-rl-lite-artifact-sha256/v1",
   "scope": "Exploratory and development-only appendix evidence; not confirmatory Experiment B evidence.",
   "sha256": {
+    "carr_rl_lite_exp/CONTROLLED_RESOURCE_MEASUREMENT.md": "19296319bd1bd336d779b8ec10db5b3207a3a36e500e25db285bdfab64fd0080",
     "carr_rl_lite_exp/results/carr_rl_lite/ab_holdout/report.json": "bdec99be380a6666cb626362b49a85f274771c8b58509b374b048b91c87ec6dd",
     "carr_rl_lite_exp/results/carr_rl_lite/ab_holdout/resource_counts.csv": "614b8abc5444511d62c8ee73168b7fc1b7dcfeba7a35754cd04368e9fc5abcb5",
     "carr_rl_lite_exp/results/carr_rl_lite/ab_holdout/resource_counts_summary.json": "7c636000390f694e9ef01da3bc4b91af91168292ae537092760a5cac14bdd008",
@@ -10,11 +11,14 @@
     "carr_rl_lite_exp/results/carr_rl_lite/expF_g5cap.json": "42c1213289ccb4808ff3e75bde7b2fd21059127c68366acf8897174ee1eebcca",
     "carr_rl_lite_exp/results/carr_rl_lite/expG_threshsens.json": "66fb7a50dc15ce1a171f9cf4cca2a299098dbb06c6d55f5eb3a85eadea709331",
     "carr_rl_lite_exp/results/carr_rl_lite/model/report.json": "9e6814d1225fa43fd6c9c2900b93daa4476af912106be383cc7f009ce17dd6ac",
+    "carr_rl_lite_exp/results/carr_rl_lite/microbench_narrow_r020.csv": "0e8f897a52c2a6532c4dc241430ab914b964ac96088444663a274392e96a4864",
+    "carr_rl_lite_exp/results/carr_rl_lite/microbench_narrow_r020.json": "cbe76b003803a5599d946c98b8bd023f889360ef07351dede13ef3d122fb8f9d",
+    "carr_rl_lite_exp/results/carr_rl_lite/microbench_summary.json": "6a4cf973a449352b77bdd36aca1ec6ac4172f4a4a5bfe66836b3eef78c309d27",
     "carr_rl_lite_exp/scripts/make_dev_runner.py": "8bbd2ef7858f64ff43ae84feb80222f1308e7ee34aab58098e84feb728d19291",
     "carr_rl_lite_exp/scripts/run_carr_rl_lite_ab_holdout.sh": "6eb5a846408c25f07f8660fc92a526e34f4dccd96fd0bd6d53a598d166f02427",
     "carr_rl_lite_exp/scripts/run_carr_rl_lite_ab_train.sh": "9a0225065065eeded0fc626e151e42981f5857eb17bc64b102e87dfcc2a8f291",
     "carr_rl_lite_exp/scripts/run_carr_rl_lite_dev.py": "4522d389fa176c783cba51f95d7bbd6ed8553c0f0bea85de278199c8ea933c9b",
-    "carr_rl_lite_exp/scripts/verify_public_summaries.py": "8075a576514f47d6f0c4747e1c5691bc4946dd98bfe97fad747cc62bd6408e96",
+    "carr_rl_lite_exp/scripts/verify_public_summaries.py": "310484257d7beac080b37f2185fb811a819c9ce211a945e1cddc4750dff31948",
     "reports/posthoc_review_sensitivity_2026-08-03.json": "77845872984724a9f8f73e3537e584a17d41aab48b543f6fc7b3161e5e7cf0ea",
     "scripts/analyze_posthoc_review_sensitivity.py": "854eb256f76c4ad71c020d0807ec04b05a11461c4d1184665abe02338507e67a"
   }

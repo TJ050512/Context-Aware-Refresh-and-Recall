@@ -15,7 +15,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
-from statistics import fmean
+from statistics import fmean, median
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -23,6 +23,10 @@ ARTIFACT_ROOT = REPO_ROOT / "carr_rl_lite_exp"
 RESULT_ROOT = ARTIFACT_ROOT / "results"
 SUMMARY_ROOT = RESULT_ROOT / "carr_rl_lite"
 TOLERANCE = 1e-10
+MICROBENCH_CSV = SUMMARY_ROOT / "microbench_narrow_r020.csv"
+MICROBENCH_RAW = SUMMARY_ROOT / "microbench_narrow_r020.json"
+MICROBENCH_SUMMARY = SUMMARY_ROOT / "microbench_summary.json"
+MICROBENCH_NOTE = ARTIFACT_ROOT / "CONTROLLED_RESOURCE_MEASUREMENT.md"
 
 
 def close(actual: float, expected: float, *, label: str) -> None:
@@ -206,6 +210,125 @@ def verify_compact_diagnostics() -> None:
         raise AssertionError("post-hoc sensitivity report scope mismatch")
 
 
+def verify_controlled_microbenchmark() -> None:
+    """Recompute the controlled, development-only timing summary."""
+    if not MICROBENCH_NOTE.is_file():
+        raise AssertionError("controlled-resource note is missing")
+
+    summary = load_json(MICROBENCH_SUMMARY)
+    raw = load_json(MICROBENCH_RAW)
+    with MICROBENCH_CSV.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+
+    if summary.get("timing_evidence_valid") is not True:
+        raise AssertionError("microbenchmark timing flag must be boolean true")
+    if summary.get("evidence_class") != "development_descriptive":
+        raise AssertionError("microbenchmark evidence class is not descriptive")
+    if int(summary.get("n_runs", -1)) != 6 or int(summary.get("n_runs_per_method", -1)) != 2:
+        raise AssertionError("microbenchmark sample size is not explicit")
+    if raw.get("evidence_class") != "development" or raw.get("split") != "development":
+        raise AssertionError("raw microbenchmark is not development-only")
+    if raw.get("protocol", {}).get("timing_evidence_valid") is not True:
+        raise AssertionError("raw microbenchmark timing flag is not true")
+    if len(rows) != 6 or len(raw.get("runs", [])) != 6:
+        raise AssertionError("microbenchmark must contain exactly six runs")
+
+    required_columns = {
+        "method",
+        "seed",
+        "total_generator_calls",
+        "post_bootstrap_generation_count",
+        "post_bootstrap_reactivation_count",
+        "post_bootstrap_publication_count",
+        "generator_seconds",
+        "simulator_seconds",
+        "elapsed_seconds",
+        "timing_evidence_valid",
+    }
+    if not required_columns.issubset(rows[0]):
+        raise AssertionError("microbenchmark CSV is missing auditable counters")
+
+    raw_by_key = {(run["method"], int(run["seed"])): run for run in raw["runs"]}
+    methods = {
+        "context_memory_B25",
+        "context_no_reactivation_B25",
+        "exact_even_B25",
+    }
+    if {row["method"] for row in rows} != methods:
+        raise AssertionError("microbenchmark method set mismatch")
+    if {int(row["seed"]) for row in rows} != {17, 18}:
+        raise AssertionError("microbenchmark seed set mismatch")
+    if {row["workload"] for row in rows} != {"abrupt"}:
+        raise AssertionError("microbenchmark workload mismatch")
+    if {row["map_id"] for row in rows} != {"warehouse_small_narrow_kiva"}:
+        raise AssertionError("microbenchmark map mismatch")
+
+    for row in rows:
+        key = (row["method"], int(row["seed"]))
+        run = raw_by_key[key]
+        budget = run["budget"]
+        if row["timing_evidence_valid"].lower() != "true" or run.get("timing_evidence_valid") is not True:
+            raise AssertionError(f"invalid timing flag for {key}")
+        for column, raw_value in (
+            ("total_generator_calls", budget["total_generator_calls"]),
+            ("post_bootstrap_generation_count", budget["post_bootstrap_generation_count"]),
+            ("post_bootstrap_reactivation_count", budget["post_bootstrap_reactivation_count"]),
+            ("post_bootstrap_publication_count", budget["post_bootstrap_publication_count"]),
+        ):
+            if int(row[column]) != int(raw_value):
+                raise AssertionError(f"microbenchmark counter mismatch for {key}: {column}")
+        for column in ("generator_seconds", "simulator_seconds", "elapsed_seconds"):
+            close(float(row[column]), float(run[column]), label=f"{key} {column}")
+
+    for method in methods:
+        selected = [row for row in rows if row["method"] == method]
+        expected = summary["per_method"][method]
+        for column, key in (
+            ("total_generator_calls", "calls"),
+            ("generator_seconds", "gen_s"),
+            ("simulator_seconds", "sim_s"),
+            ("elapsed_seconds", "elapsed_s"),
+        ):
+            close(fmean(float(row[column]) for row in selected), float(expected[key]), label=f"{method} {key}")
+
+    run_level_latencies = [
+        float(row["generator_seconds"]) / float(row["total_generator_calls"])
+        for row in rows
+    ]
+    close(
+        fmean(run_level_latencies),
+        float(summary["per_call_gen_latency_s"]),
+        label="unweighted per-run generator latency",
+    )
+    close(
+        median(run_level_latencies),
+        float(summary["per_call_gen_latency_median_s"]),
+        label="median per-run generator latency",
+    )
+    pooled_latency = sum(float(row["generator_seconds"]) for row in rows) / sum(
+        float(row["total_generator_calls"]) for row in rows
+    )
+    close(pooled_latency, float(summary["pooled_gen_latency_s"]), label="pooled generator latency")
+
+    carr = summary["per_method"]["context_memory_B25"]
+    dense = summary["per_method"]["exact_even_B25"]
+    close(
+        100.0 * (1.0 - float(carr["calls"]) / float(dense["calls"])),
+        float(summary["microbench_call_reduction_pct"]),
+        label="microbenchmark call reduction",
+    )
+    close(
+        100.0 * (float(carr["elapsed_s"]) / float(dense["elapsed_s"]) - 1.0),
+        float(summary["end_to_end_carr_vs_b25_pct"]),
+        label="CARR end-to-end comparison",
+    )
+    close(
+        100.0 * (1.0 - float(carr["gen_s"]) / float(dense["gen_s"])),
+        float(summary["generator_only_reduction_pct"]),
+        label="CARR generator-only reduction",
+    )
+
+
 def verify_manifest() -> None:
     manifest_path = ARTIFACT_ROOT / "ARTIFACT_SHA256.json"
     manifest = load_json(manifest_path)
@@ -217,8 +340,20 @@ def verify_manifest() -> None:
 
 
 def verify_anonymity() -> None:
-    forbidden = (b"/root/", b"seetacloud", b"autodl-container")
-    for path in RESULT_ROOT.rglob("*"):
+    forbidden = (
+        b"/root/",
+        b"/users/",
+        b"seetacloud",
+        b"autodl-container",
+        b"maxiaoxiao",
+        b"tj050512",
+        b"@jd.com",
+    )
+    paths = list(RESULT_ROOT.rglob("*")) + [
+        ARTIFACT_ROOT / "README.md",
+        MICROBENCH_NOTE,
+    ]
+    for path in paths:
         if not path.is_file():
             continue
         data = path.read_bytes().lower()
@@ -233,6 +368,7 @@ def main() -> None:
     verify_threshold_sensitivity()
     verify_learned_holdout()
     verify_compact_diagnostics()
+    verify_controlled_microbenchmark()
     verify_manifest()
     verify_anonymity()
     print("exploratory artifact summaries: PASS")

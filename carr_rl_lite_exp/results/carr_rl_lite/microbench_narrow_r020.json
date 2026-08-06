@@ -14,7 +14,7 @@
     "num_params": 3084,
     "output_channels": 4,
     "params_sha256": "03a14c7dbecee1b30cf73be6c4be9dc3da9ac176b462fa52542b4163aee52b7a",
-    "path": "/root/autodl-tmp/dai/research_workspace/external/OnlineGGO/CMAES/logs/dai10k_resume_seed17_from_2k/checkpoints/optimal_update_model_20000.json"
+    "path": "REPO_ROOT/external/OnlineGGO/CMAES/logs/dai10k_resume_seed17_from_2k/checkpoints/optimal_update_model_20000.json"
   },
   "manifests": {
     "warehouse_small_narrow_kiva:abrupt:17:879b50752c4f5816": {
@@ -1017,7 +1017,7 @@
     }
   },
   "map_id": "warehouse_small_narrow_kiva",
-  "map_path": "/root/autodl-tmp/dai/research_workspace/external/OnlineGGO/Guided-PIBT/guided-pibt/benchmark-lifelong/maps/warehouse_small_narrow_kiva.map",
+  "map_path": "REPO_ROOT/external/OnlineGGO/Guided-PIBT/guided-pibt/benchmark-lifelong/maps/warehouse_small_narrow_kiva.map",
   "map_sha256": "866e664553959fb44af359276885e2e72192eaf36fd0f4abde3726474703cbb6",
   "methods": [
     "context_memory_B25",
@@ -1269,7 +1269,7 @@
       "effective_guidance_switch_count": 7,
       "elapsed_seconds": 13.959904281422496,
       "evidence_class": "development",
-      "execution_host": "autodl-container-83b647b69c-3c2a1988",
+      "execution_host": "anonymous-controlled-host",
       "execution_parent_process_id": 1302,
       "execution_process_id": 12728,
       "execution_process_start_ns": 1786000748576736332,
@@ -2135,7 +2135,7 @@
       "mandatory_bootstrap_calls": 1,
       "manifest_id": "warehouse_small_narrow_kiva:abrupt:17:879b50752c4f5816",
       "map_id": "warehouse_small_narrow_kiva",
-      "map_path": "/root/autodl-tmp/dai/research_workspace/external/OnlineGGO/Guided-PIBT/guided-pibt/benchmark-lifelong/maps/warehouse_small_narrow_kiva.map",
+      "map_path": "REPO_ROOT/external/OnlineGGO/Guided-PIBT/guided-pibt/benchmark-lifelong/maps/warehouse_small_narrow_kiva.map",
       "method": "context_memory_B25",
       "num_task_finished": 3839,
       "planner_timeouts": 0,
@@ -12185,7 +12185,7 @@
       "effective_guidance_switch_count": 7,
       "elapsed_seconds": 10.925980212166905,
       "evidence_class": "development",
-      "execution_host": "autodl-container-83b647b69c-3c2a1988",
+      "execution_host": "anonymous-controlled-host",
       "execution_parent_process_id": 1302,
       "execution_process_id": 8188,
       "execution_process_start_ns": 1786000724691392492,
@@ -13077,7 +13077,7 @@
       "mandatory_bootstrap_calls": 1,
       "manifest_id": "warehouse_small_narrow_kiva:abrupt:17:879b50752c4f5816",
       "map_id": "warehouse_small_narrow_kiva",
-      "map_path": "/root/autodl-tmp/dai/research_workspace/external/OnlineGGO/Guided-PIBT/guided-pibt/benchmark-lifelong/maps/warehouse_small_narrow_kiva.map",
+      "map_path": "REPO_ROOT/external/OnlineGGO/Guided-PIBT/guided-pibt/benchmark-lifelong/maps/warehouse_small_narrow_kiva.map",
       "method": "context_no_reactivation_B25",
       "num_task_finished": 3873,
       "planner_timeouts": 0,
@@ -23127,7 +23127,7 @@
       "effective_guidance_switch_count": 25,
       "elapsed_seconds": 11.932193466462195,
       "evidence_class": "development",
-      "execution_host": "autodl-container-83b647b69c-3c2a1988",
+      "execution_host": "anonymous-controlled-host",
       "execution_parent_process_id": 1302,
       "execution_process_id": 10459,
       "execution_process_start_ns": 1786000736239755901,
@@ -23810,7 +23810,7 @@
       "mandatory_bootstrap_calls": 1,
       "manifest_id": "warehouse_small_narrow_kiva:abrupt:17:879b50752c4f5816",
       "map_id": "warehouse_small_narrow_kiva",
-      "map_path": "/root/autodl-tmp/dai/research_workspace/external/OnlineGGO/Guided-PIBT/guided-pibt/benchmark-lifelong/maps/warehouse_small_narrow_kiva.map",
+      "map_path": "REPO_ROOT/external/OnlineGGO/Guided-PIBT/guided-pibt/benchmark-lifelong/maps/warehouse_small_narrow_kiva.map",
       "method": "exact_even_B25",
       "num_task_finished": 3886,
       "planner_timeouts": 0,
@@ -33194,7 +33194,7 @@
       "effective_guidance_switch_count": 10,
       "elapsed_seconds": 13.988598682917655,
       "evidence_class": "development",
-      "execution_host": "autodl-container-83b647b69c-3c2a1988",
+      "execution_host": "anonymous-controlled-host",
       "execution_parent_process_id": 1302,
       "execution_process_id": 1369,
       "execution_process_start_ns": 1786000682781135987,
@@ -34112,7 +34112,7 @@
       "mandatory_bootstrap_calls": 1,
       "manifest_id": "warehouse_small_narrow_kiva:abrupt:18:df607e3df1e2757f",
       "map_id": "warehouse_small_narrow_kiva",
-      "map_path": "/root/autodl-tmp/dai/research_workspace/external/OnlineGGO/Guided-PIBT/guided-pibt/benchmark-lifelong/maps/warehouse_small_narrow_kiva.map",
+      "map_path": "REPO_ROOT/external/OnlineGGO/Guided-PIBT/guided-pibt/benchmark-lifelong/maps/warehouse_small_narrow_kiva.map",
       "method": "context_memory_B25",
       "num_task_finished": 3880,
       "planner_timeouts": 0,
@@ -44163,7 +44163,7 @@
       "effective_guidance_switch_count": 11,
       "elapsed_seconds": 12.457977782934904,
       "evidence_class": "development",
-      "execution_host": "autodl-container-83b647b69c-3c2a1988",
+      "execution_host": "anonymous-controlled-host",
       "execution_parent_process_id": 1302,
       "execution_process_id": 5914,
       "execution_process_start_ns": 1786000711605070904,
@@ -45159,7 +45159,7 @@
       "mandatory_bootstrap_calls": 1,
       "manifest_id": "warehouse_small_narrow_kiva:abrupt:18:df607e3df1e2757f",
       "map_id": "warehouse_small_narrow_kiva",
-      "map_path": "/root/autodl-tmp/dai/research_workspace/external/OnlineGGO/Guided-PIBT/guided-pibt/benchmark-lifelong/maps/warehouse_small_narrow_kiva.map",
+      "map_path": "REPO_ROOT/external/OnlineGGO/Guided-PIBT/guided-pibt/benchmark-lifelong/maps/warehouse_small_narrow_kiva.map",
       "method": "context_no_reactivation_B25",
       "num_task_finished": 3932,
       "planner_timeouts": 0,
@@ -55210,7 +55210,7 @@
       "effective_guidance_switch_count": 25,
       "elapsed_seconds": 13.423142725601792,
       "evidence_class": "development",
-      "execution_host": "autodl-container-83b647b69c-3c2a1988",
+      "execution_host": "anonymous-controlled-host",
       "execution_parent_process_id": 1302,
       "execution_process_id": 3643,
       "execution_process_start_ns": 1786000697663419757,
@@ -55893,7 +55893,7 @@
       "mandatory_bootstrap_calls": 1,
       "manifest_id": "warehouse_small_narrow_kiva:abrupt:18:df607e3df1e2757f",
       "map_id": "warehouse_small_narrow_kiva",
-      "map_path": "/root/autodl-tmp/dai/research_workspace/external/OnlineGGO/Guided-PIBT/guided-pibt/benchmark-lifelong/maps/warehouse_small_narrow_kiva.map",
+      "map_path": "REPO_ROOT/external/OnlineGGO/Guided-PIBT/guided-pibt/benchmark-lifelong/maps/warehouse_small_narrow_kiva.map",
       "method": "exact_even_B25",
       "num_task_finished": 3919,
       "planner_timeouts": 0,
@@ -65225,7 +65225,7 @@
   "runtime_manifest": {
     "environment": {
       "cpu_count": 128,
-      "host": "autodl-container-83b647b69c-3c2a1988",
+      "host": "anonymous-controlled-host",
       "numpy": "1.21.4",
       "platform": "Linux-5.15.0-78-generic-x86_64-with-glibc2.31",
       "python": "3.9.25",
@@ -65244,47 +65244,47 @@
     },
     "sources": {
       "checkpoint_file": {
-        "path": "/root/autodl-tmp/dai/research_workspace/external/OnlineGGO/CMAES/logs/dai10k_resume_seed17_from_2k/checkpoints/optimal_update_model_20000.json",
+        "path": "REPO_ROOT/external/OnlineGGO/CMAES/logs/dai10k_resume_seed17_from_2k/checkpoints/optimal_update_model_20000.json",
         "sha256": "96cf69e18c4d1326bc42ec87be09341bf2c75038579161363473922448e27528"
       },
       "claim_runner": {
-        "path": "/root/autodl-tmp/dai/research_workspace/src/dai_lmapf/same_call_claim_runner.py",
+        "path": "REPO_ROOT/src/dai_lmapf/same_call_claim_runner.py",
         "sha256": "3d174cc94d9d0918b3c5e15d2faf2bc70006ba64fab9979c7814ac8aea751f5a"
       },
       "frozen_cnn_generator": {
-        "path": "/root/autodl-tmp/dai/research_workspace/src/dai_lmapf/frozen_cnn_generator.py",
+        "path": "REPO_ROOT/src/dai_lmapf/frozen_cnn_generator.py",
         "sha256": "023126dd8ce34e8a65ae011f8a7dbb0cca754220b62920db812237de0285b7f2"
       },
       "map": {
-        "path": "/root/autodl-tmp/dai/research_workspace/external/OnlineGGO/Guided-PIBT/guided-pibt/benchmark-lifelong/maps/warehouse_small_narrow_kiva.map",
+        "path": "REPO_ROOT/external/OnlineGGO/Guided-PIBT/guided-pibt/benchmark-lifelong/maps/warehouse_small_narrow_kiva.map",
         "sha256": "866e664553959fb44af359276885e2e72192eaf36fd0f4abde3726474703cbb6"
       },
       "online_ggo_adapter": {
-        "path": "/root/autodl-tmp/dai/research_workspace/src/dai_lmapf/online_ggo_adapter.py",
+        "path": "REPO_ROOT/src/dai_lmapf/online_ggo_adapter.py",
         "sha256": "013cae2734aa67782ae560e55eeb9b51c9be7343ab27e6ef2e3836ffcc1e913b"
       },
       "period_on_sim": {
-        "path": "/root/autodl-tmp/dai/research_workspace/external/OnlineGGO/CMAES/simulators/trafficMAPF_on/period_on_sim.cpython-39-x86_64-linux-gnu.so",
+        "path": "REPO_ROOT/external/OnlineGGO/CMAES/simulators/trafficMAPF_on/period_on_sim.cpython-39-x86_64-linux-gnu.so",
         "sha256": "9e4b54722d67598f13f1bc2d4d0fb4121a94f79962923c184c1d269225e8c1a5"
       },
       "protocol": {
-        "path": "/root/autodl-tmp/dai/research_workspace/EXPERIMENT_PROTOCOL_SAME_CALL_2026-07-14.md",
+        "path": "REPO_ROOT/EXPERIMENT_PROTOCOL_SAME_CALL_2026-07-14.md",
         "sha256": "9e3740d240525100183eb54ddbfd81e475e8f9680002ed34a2255568ea878a41"
       },
       "publication_policy": {
-        "path": "/root/autodl-tmp/dai/research_workspace/src/dai_lmapf/publication_policy.py",
+        "path": "REPO_ROOT/src/dai_lmapf/publication_policy.py",
         "sha256": "d860af7cc664ff30eaed6bad099313c27f74e99e933f95503d668d57b0ec6d88"
       },
       "task_generator": {
-        "path": "/root/autodl-tmp/dai/research_workspace/external/OnlineGGO/CMAES/env_search/utils/task_generator.py",
+        "path": "REPO_ROOT/external/OnlineGGO/CMAES/env_search/utils/task_generator.py",
         "sha256": "ae37b0c02bca7815af3d8e491507281ed92d85fa7ed91ec7ebe3ca44c889dbf5"
       },
       "trafficflow_online_env": {
-        "path": "/root/autodl-tmp/dai/research_workspace/external/OnlineGGO/CMAES/env_search/iterative_update/envs/trafficflow_online_env.py",
+        "path": "REPO_ROOT/external/OnlineGGO/CMAES/env_search/iterative_update/envs/trafficflow_online_env.py",
         "sha256": "178d954b17f1bf33a1772fd481adb66709de221957dc41ae9c592e591ecfa5a4"
       },
       "validation_runner": {
-        "path": "/root/autodl-tmp/dai/research_workspace/scripts/run_same_call_confirmation_v1.py",
+        "path": "REPO_ROOT/scripts/run_same_call_confirmation_v1.py",
         "sha256": "9eb203c1caf31f81409787a699a88ebc025071977192ec95b25390b5cc2b5538"
       }
     }

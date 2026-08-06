@@ -42,6 +42,7 @@ CARR/
 │   └── posthoc_review_sensitivity_2026-08-03.json # Exploratory robustness report
 ├── carr_rl_lite_exp/                              # Development-only appendix evidence
 │   ├── README.md                                  # Scope, provenance, and reproduction notes
+│   ├── CONTROLLED_RESOURCE_MEASUREMENT.md          # Post-confirmatory controlled timing boundary
 │   ├── ARTIFACT_SHA256.json                       # Checksums for compact appendix evidence
 │   ├── scripts/                                   # Learned gate and verification utilities
 │   └── results/                                   # Compact summaries and development CSVs
@@ -119,8 +120,11 @@ development-only and post-hoc checks reported in the appendix: the
 development-tuned learned gate, the matched G5 generation-cap comparison,
 one-at-a-time threshold sensitivity, logical-call timing diagnostics, and
 bootstrap frontier stability. These checks are explicitly separated from the
-frozen Experiment B confirmatory matrix. They neither change the primary
-estimand nor enter the six-comparison multiplicity family.
+frozen Experiment B confirmatory matrix. The directory also contains a small,
+post-confirmatory [controlled wall-clock microbenchmark](carr_rl_lite_exp/CONTROLLED_RESOURCE_MEASUREMENT.md)
+showing why logical generator calls are not a wall-clock or energy proxy on
+this small-CNN backbone. These checks neither change the primary estimand nor
+enter the six-comparison multiplicity family.
 
 For the learned holdout check, the archived historical report's `6.51 vs
 6.50` values are effective post-bootstrap guidance publications, not generator
