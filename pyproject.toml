@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "dai-lmapf-research"
 version = "0.0.1"
-description = "Anonymous code and results supplement for adaptive global-guidance refresh in lifelong MAPF"
+description = "Official implementation and reproducibility artifact for the DAI 2026 Oral paper: Budgeted Guidance Refresh Control for Lifelong Multi-Agent Path Finding."
 requires-python = ">=3.9"
 
 [project.optional-dependencies]

@@ -141,5 +141,5 @@ bash carr_rl_lite_exp/scripts/run_carr_rl_lite_ab_holdout.sh
 ```
 
 The large raw simulator JSONs and logs are intentionally excluded; the
-reviewer-facing CSV matrices, compact reports, policy files, and decision-row
+reproducibility CSV matrices, compact reports, policy files, and decision-row
 tables needed for the documented offline checks are included.
