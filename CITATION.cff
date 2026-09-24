@@ -1,0 +1,35 @@
+cff-version: 1.2.0
+message: "If you use CARR, please cite the paper in preferred-citation."
+type: software
+title: "Context-Aware Refresh and Recall (CARR)"
+authors:
+  - family-names: Ma
+    given-names: Xiaoxiao
+    affiliation: Beijing University of Posts and Telecommunications
+  - family-names: Fang
+    given-names: Quan
+    affiliation: Beijing University of Posts and Telecommunications
+  - family-names: Jiang
+    given-names: Xiankun
+    affiliation: Beijing University of Posts and Telecommunications
+repository-code: "https://github.com/TJ050512/Context-Aware-Refresh-and-Recall"
+url: "https://github.com/TJ050512/Context-Aware-Refresh-and-Recall"
+license: MIT
+preferred-citation:
+  type: conference-paper
+  title: "Budgeted Guidance Refresh Control: A Paired Throughput–Call Study in Lifelong Multi-Agent Path Finding"
+  authors:
+    - family-names: Ma
+      given-names: Xiaoxiao
+      affiliation: Beijing University of Posts and Telecommunications
+    - family-names: Fang
+      given-names: Quan
+      affiliation: Beijing University of Posts and Telecommunications
+    - family-names: Jiang
+      given-names: Xiankun
+      affiliation: Beijing University of Posts and Telecommunications
+  collection-title: "The Eighth International Conference on Distributed Artificial Intelligence"
+  conference:
+    name: "The Eighth International Conference on Distributed Artificial Intelligence (DAI 2026)"
+  year: 2026
+  notes: "Accepted for oral presentation at DAI 2026. Quan Fang is the corresponding author."
