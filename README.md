@@ -99,6 +99,8 @@ The compact analysis needs only Python's standard library. A full simulator
 rerun additionally requires the patched OnlineGGO backbone and trained
 checkpoint described below.
 
+> 📘 **For contributors:** See [`CONTRIBUTING.md`](CONTRIBUTING.md) for guidelines on running tests, understanding the paper ↔ code mapping, and submitting pull requests.
+
 ## Reproduce Results
 
 Run the following commands from the repository root.
